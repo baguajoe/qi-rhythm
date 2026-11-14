@@ -26,6 +26,7 @@ def create_app(config_name: str | None = None) -> Flask:
         async_mode=app.config["SOCKETIO_ASYNC_MODE"],
     )
 
+    _register_jwt_errors()
     register_cli(app)
     from .api import register_blueprints
 
@@ -36,3 +37,18 @@ def create_app(config_name: str | None = None) -> Flask:
         return jsonify(status="ok", service="qi-rhythm-api")
 
     return app
+
+
+def _register_jwt_errors() -> None:
+    """Auth failures use the same {"error": ...} shape and plain language as the rest of the API,
+    and always 401, so the dashboard can show "Please sign in again" instead of a generic error."""
+
+    def signed_out(message: str):
+        return jsonify(error=message), 401
+
+    jwt.unauthorized_loader(lambda _reason: signed_out("Please sign in."))
+    jwt.invalid_token_loader(lambda _reason: signed_out("Please sign in again."))
+    jwt.expired_token_loader(
+        lambda _header, _payload: signed_out("Your sign-in has expired. Please sign in again.")
+    )
+    jwt.revoked_token_loader(lambda _header, _payload: signed_out("Please sign in again."))

@@ -7,7 +7,7 @@ room so the Display View can follow live (count-in, beat lights, input level).
 
 from __future__ import annotations
 
-from flask import request
+from flask import current_app, request
 from flask_jwt_extended import decode_token
 from flask_socketio import emit, join_room, leave_room
 
@@ -43,7 +43,8 @@ def _claims_from_auth(auth) -> dict | None:
         return None
     try:
         return decode_token(token)
-    except Exception:  # noqa: BLE001 - expired/invalid token
+    except Exception as exc:  # noqa: BLE001 - expired/invalid token
+        current_app.logger.warning("socket auth rejected: %s: %s", type(exc).__name__, exc)
         return None
 
 
