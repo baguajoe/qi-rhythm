@@ -1,0 +1,66 @@
+/* Global tokens. Dashboard base font >= 20px; buttons >= 56px. */
+:root {
+  --bg: #fdfaf3;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --muted: #4a4a4a;
+  --primary: #1b3a5c;
+  --primary-text: #ffffff;
+  --accent: #f2b33d;
+  --focus: #0b5fff;
+  --success: #1e6b3a;
+  --border: #6b6b6b;
+  --radius: 14px;
+  --tap: 56px;
+  font-size: 20px;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* High-contrast mode (AAA) */
+:root[data-contrast='high'] {
+  --bg: #000000;
+  --surface: #000000;
+  --text: #ffffff;
+  --muted: #ffffff;
+  --primary: #ffff00;
+  --primary-text: #000000;
+  --accent: #ffff00;
+  --focus: #00ffff;
+  --success: #7dff7d;
+  --border: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+.page {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
