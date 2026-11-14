@@ -126,6 +126,11 @@ Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions
   retried in memory with backoff through network blips; lost on page reload).
 - `frontend/src/audio/instruments.js` VOICE_SAMPLE_URLS — TODO(phase-2): swap synthesized kit for original Cubase-recorded one-shots on R2.
 - `scoring.MODE_WEIGHTS` — TODO(phase-2): weights for Finish the Beat, Music Memory, Call-and-Response.
+- `games/base.py` GameModeKey — TODO(phase-2)/(phase-5): new modes implement `GameMode`
+  (setup/reference/capture/analyze/score) and call `register()`; scoring takes `mode`.
 
 ## Review flags before launch
-- Genre `cultural_notes` must be reviewed by a knowledgeable musician.
+- Genre `cultural_notes` (backend/app/seed/library.py) must be reviewed by a knowledgeable musician.
+- Run Lighthouse accessibility (needs Chrome) on /login, / and /display/:id; target >= 95.
+- Field-test scoring with real hand drums/shakers in a real room; synthetic tests can't capture
+  every room (reverb, crowd noise, Bluetooth speaker latency).
