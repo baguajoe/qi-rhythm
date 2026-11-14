@@ -3,7 +3,7 @@ import Layout from '../components/Layout.jsx';
 import { AuthProvider } from '../features/auth/AuthContext.jsx';
 import LoginPage from '../features/auth/LoginPage.jsx';
 import RequireAuth from '../features/auth/RequireAuth.jsx';
-import DashboardPage from '../features/dashboard/DashboardPage.jsx';
+import ClassPage from '../features/dashboard/ClassPage.jsx';
 import CalibrationPage from '../features/calibration/CalibrationPage.jsx';
 import LibraryPage from '../features/library/LibraryPage.jsx';
 import TeamsPage from '../features/teams/TeamsPage.jsx';
@@ -22,7 +22,7 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route index element={<ClassPage />} />
             <Route path="teams" element={<TeamsPage />} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="calibration" element={<CalibrationPage />} />

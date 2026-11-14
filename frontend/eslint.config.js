@@ -24,6 +24,7 @@ export default [
       ...reactHooks.configs.recommended.rules,
       ...jsxA11y.configs.strict.rules,
       'react/prop-types': 'off',
+      'jsx-a11y/label-has-associated-control': ['error', { assert: 'either', depth: 4 }],
     },
   },
   prettier,

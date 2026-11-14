@@ -14,3 +14,12 @@ def register_cli(app: Flask) -> None:
         if demo:
             inst = seed_demo()
             click.echo(f"Demo instructor: {inst.email}")
+
+    @app.cli.command("purge-recordings")
+    @click.option("--all", "purge_all", is_flag=True, help="Delete every recording now.")
+    def purge_cmd(purge_all: bool):
+        """Delete recordings past each organization's retention period (run daily)."""
+        from .services.game import purge_recordings
+
+        n = purge_recordings(older_than_days=None if purge_all else -1)
+        click.echo(f"Deleted {n} recordings.")

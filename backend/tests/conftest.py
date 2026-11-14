@@ -28,3 +28,11 @@ def db(app):
 @pytest.fixture
 def client(app, db):
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _tmp_storage(app, tmp_path):
+    app.config["LOCAL_STORAGE_DIR"] = str(tmp_path / "recordings")
+    app.extensions.pop("qi_storage", None)
+    yield
+    app.extensions.pop("qi_storage", None)

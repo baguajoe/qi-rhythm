@@ -1,0 +1,54 @@
+.figure {
+  margin: 0;
+}
+.svg {
+  width: 100%;
+  height: auto;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+}
+.rowLabel {
+  font-size: 18px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.axis {
+  stroke: var(--border);
+  stroke-width: 2;
+}
+.link {
+  stroke: var(--success);
+  stroke-width: 3;
+}
+.matched {
+  fill: var(--success);
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.missed {
+  fill: var(--surface);
+  stroke: var(--text);
+  stroke-width: 3;
+  stroke-dasharray: 5 4;
+}
+.extra {
+  fill: var(--accent);
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.summary {
+  color: var(--muted);
+}

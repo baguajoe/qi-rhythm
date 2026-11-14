@@ -62,6 +62,16 @@ npm run build
 - Design choice: a team playing the right pattern uniformly fast/slow is matched via the tempo
   fit and penalised only in tempo_consistency (e.g. 10% fast → tempo ≈ 70, total ≈ 95).
 
+## Round flow
+Dashboard → `POST /api/sessions/<id>/rounds` → `PATCH /api/rounds/<id> {status: playing_reference}`
+→ Tone.js plays reference → `PATCH {status: recording}` → recorder starts, count-in clicks, team plays,
+1 bar slack → `POST /api/rounds/<id>/recording` (WAV + `countin_start_s` = count-in click 1 time −
+first recorded sample time, both on the shared AudioContext clock) → backend stores (R2/local),
+analyses via the round's GameMode, saves Score, recomputes Team.total_points, broadcasts
+`round:scored` + `scoreboard:updated`. Overrides keep the machine score (`Score.override_values`).
+Retention: run `flask --app wsgi purge-recordings` daily (cron); `--all` deletes everything.
+No speech is spoken while recording (it would be heard as hits).
+
 ## Conventions
 - Conventional commits (`feat:`, `fix:`, `test:`, `chore:`); commit + push after each slice.
 - Stubs are marked `# TODO(phase-N):` (or `// TODO(phase-N):`) and listed below.
@@ -79,7 +89,7 @@ npm run build
 4. [x] Auth + teams
 5. [x] Rhythm library + Tone.js player + beat visualizer
 6. [x] Calibration wizard (calibration audio is analysed in memory, never stored)
-7. [ ] Rhythm Recall round, full loop
+7. [x] Rhythm Recall round, full loop
 8. [ ] Display View + Socket.IO + display-token pairing + reconnection
 9. [ ] Session scoreboard + saved Activities
 10. [ ] Accessibility pass (axe-core)
@@ -90,6 +100,8 @@ event/demo mode (May 2027 Senior Community Wellness Day); Phase 5 remote tournam
 Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions.
 
 ## Open TODOs / stubs
+- `frontend/src/lib/uploadQueue.js` — TODO(phase-3): persist pending takes in IndexedDB (currently
+  retried in memory with backoff through network blips; lost on page reload).
 - `frontend/src/audio/instruments.js` VOICE_SAMPLE_URLS — TODO(phase-2): swap synthesized kit for original Cubase-recorded one-shots on R2.
 - `scoring.MODE_WEIGHTS` — TODO(phase-2): weights for Finish the Beat, Music Memory, Call-and-Response.
 

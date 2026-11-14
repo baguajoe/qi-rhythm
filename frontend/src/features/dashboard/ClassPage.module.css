@@ -1,0 +1,154 @@
+.grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) minmax(24rem, 2fr);
+  gap: 1.25rem;
+  align-items: start;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 1000px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 1.25rem;
+}
+.column .card {
+  margin-bottom: 0;
+}
+.card h2 {
+  margin: 0;
+}
+.stage {
+  border-width: 3px;
+  border-color: var(--primary);
+}
+.now {
+  margin: 0;
+  font-size: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.phase {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin: 0;
+  min-height: 2.5rem;
+}
+.count {
+  font-size: 3rem;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.teamButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.teamButton {
+  font: inherit;
+  padding: 0.4rem;
+  min-height: var(--tap);
+  border: 4px solid transparent;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+}
+.teamButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.teamOn {
+  border-color: var(--text);
+}
+.sliders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+.presets {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.presets legend {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.preset {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 1rem;
+  min-height: var(--tap);
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex: 1;
+  min-width: 14rem;
+}
+.presetOn {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.preset input,
+.toggle input {
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+  flex: none;
+}
+.hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.toggle {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.1rem;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 2px solid var(--border);
+}
+.bigNumber {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin: 0;
+}
