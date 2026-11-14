@@ -77,7 +77,7 @@ npm run build
 2. [x] Audio engine in isolation (synth, onset, align, scoring, CLI) + pytest suite
 3. [x] Models, migrations, seed data (`flask --app wsgi seed --demo` → demo@example.com / rhythm-demo-123, dev only)
 4. [x] Auth + teams
-5. [ ] Rhythm library + Tone.js player + beat visualizer
+5. [x] Rhythm library + Tone.js player + beat visualizer
 6. [ ] Calibration wizard
 7. [ ] Rhythm Recall round, full loop
 8. [ ] Display View + Socket.IO + display-token pairing + reconnection
@@ -90,6 +90,7 @@ event/demo mode (May 2027 Senior Community Wellness Day); Phase 5 remote tournam
 Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions.
 
 ## Open TODOs / stubs
+- `frontend/src/audio/instruments.js` VOICE_SAMPLE_URLS — TODO(phase-2): swap synthesized kit for original Cubase-recorded one-shots on R2.
 - `scoring.MODE_WEIGHTS` — TODO(phase-2): weights for Finish the Beat, Music Memory, Call-and-Response.
 
 ## Review flags before launch

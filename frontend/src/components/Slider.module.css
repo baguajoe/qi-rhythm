@@ -1,0 +1,13 @@
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 14rem;
+  flex: 1;
+}
+.slider input {
+  width: 100%;
+  height: var(--tap);
+  accent-color: var(--primary);
+  cursor: pointer;
+}

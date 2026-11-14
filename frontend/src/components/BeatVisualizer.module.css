@@ -1,0 +1,56 @@
+.wrap {
+  --dot: 2.2rem;
+  padding: 1rem 1.5rem;
+}
+.large {
+  --dot: 5rem;
+  padding: 2rem 3rem;
+}
+.track {
+  position: relative;
+  height: calc(var(--dot) * 1.6);
+  border-bottom: 4px solid var(--border);
+}
+.beatLine {
+  position: absolute;
+  bottom: -4px;
+  width: 4px;
+  height: 30%;
+  background: var(--border);
+  transform: translateX(-2px);
+}
+.hit {
+  position: absolute;
+  top: 50%;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 4px solid var(--primary);
+  background: var(--surface);
+  transition:
+    background-color 120ms ease-out,
+    transform 120ms ease-out;
+}
+/* Voice shapes give a non-colour cue: shakers are squares, claps are diamonds. */
+.shaker {
+  border-radius: 18%;
+}
+.clap {
+  border-radius: 18%;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.accent {
+  border-width: 7px;
+}
+.played {
+  background: var(--primary);
+}
+.current {
+  background: var(--accent);
+  box-shadow: 0 0 0 6px var(--text);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+.clap.current {
+  transform: translate(-50%, -50%) rotate(45deg) scale(1.15);
+}
