@@ -140,7 +140,7 @@ def process_recording(
         track = db.session.get(BackingTrack, int(music["backing_track_id"]))
         if (
             track is None
-            or track.organization_id != rnd.session.organization_id
+            or track.organization_id not in (None, rnd.session.organization_id)
             or track.rhythm_id != rnd.rhythm_id
             or track.version != "bed"
             or not track.usable

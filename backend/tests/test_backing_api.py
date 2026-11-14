@@ -367,3 +367,140 @@ def test_measure_and_upload_guards(client):
     assert res.status_code == 400 and "can't be used" in res.get_json()["error"]
     res = music_turn(client, h, sess, clave, t1, bed["id"])
     assert res.status_code == 400
+
+
+# ---------------------------------------------------------------- Qi Rhythm Library
+
+
+def make_superadmin(client, email="team@eyeforge.example"):
+    """The Eye Forge Studios account. Super-admin is granted only via the CLI (as here)."""
+    tok = register(client, email=email, org="Eye Forge Studios")["access_token"]
+    inst = Instructor.query.filter_by(email=email).one()
+    inst.role = "superadmin"
+    _db.session.commit()
+    return {"Authorization": f"Bearer {tok}"}
+
+
+def test_only_superadmins_can_add_to_the_library(client):
+    h, _, clave, _, _ = setup_class(client)  # an ordinary org admin
+    res = upload(client, h, clave["id"], scope="library", **LICENSED)
+    assert res.status_code == 403 and "Eye Forge Studios" in res.get_json()["error"]
+    assert upload(client, h, clave["id"], scope="everyone").status_code == 400
+    sup = make_superadmin(client)
+    res = upload(client, sup, clave["id"], scope="library", **LICENSED)
+    assert res.status_code == 201, res.get_json()
+    t = res.get_json()["track"]
+    assert t["scope"] == "library" and t["badge"] == "Qi Rhythm Original"
+    assert _db.session.get(BackingTrack, t["id"]).organization_id is None
+    assert _db.session.get(BackingTrack, t["id"]).storage_key.startswith("backing/library/")
+
+
+def test_every_organization_gets_library_tracks_but_cannot_change_them(client):
+    h, sess, clave, t1, _ = setup_class(client)
+    sup = make_superadmin(client)
+    lib = upload(client, sup, clave["id"], scope="library", **LICENSED).get_json()["track"]
+
+    listing = client.get(f"/api/backing-tracks?rhythm_id={clave['id']}", headers=h).get_json()
+    (seen,) = listing["tracks"]
+    assert seen["id"] == lib["id"] and seen["badge"] == "Qi Rhythm Original"
+    assert seen["in_use"] is True and seen["can_edit"] is False
+    assert listing["library"] == {
+        "name": "Qi Rhythm Library",
+        "owner": "Eye Forge Studios",
+        "can_edit": False,
+    }
+    assert client.get(lib["audio_path"], headers=h).status_code == 200
+    assert (
+        client.patch(f"/api/backing-tracks/{lib['id']}", json={"bpm": 91}, headers=h).status_code
+        == 403
+    )
+    assert client.delete(f"/api/backing-tracks/{lib['id']}", headers=h).status_code == 403
+    music = new_round(client, h, sess, clave, t1)["reference"]["music"]
+    assert music["bed"]["id"] == lib["id"] and music["bed"]["badge"] == "Qi Rhythm Original"
+
+    # The super-admin can edit and delete it.
+    res = client.patch(f"/api/backing-tracks/{lib['id']}", json={"notes": "v2"}, headers=sup)
+    assert res.status_code == 200 and res.get_json()["track"]["can_edit"] is True
+    assert client.delete(f"/api/backing-tracks/{lib['id']}", headers=sup).status_code == 200
+    assert client.get("/api/backing-tracks", headers=h).get_json()["tracks"] == []
+
+
+def test_unlicensed_library_tracks_are_hidden_from_classes(client):
+    h, sess, clave, t1, _ = setup_class(client)
+    sup = make_superadmin(client)
+    lib = upload(client, sup, clave["id"], scope="library").get_json()["track"]  # no license
+    assert client.get(lib["audio_path"], headers=h).status_code == 403
+    assert client.get(lib["audio_path"], headers=sup).status_code == 200
+    assert new_round(client, h, sess, clave, t1)["reference"]["music"] is None
+
+
+def test_an_organizations_own_loop_plays_instead_of_the_library_one(client):
+    h, sess, clave, t1, _ = setup_class(client)
+    sup = make_superadmin(client)
+    lib_bed = upload(client, sup, clave["id"], scope="library", **LICENSED).get_json()["track"]
+    lib_full = upload(
+        client, sup, clave["id"], scope="library", version="full", **LICENSED
+    ).get_json()["track"]
+    own_bed = upload(client, h, clave["id"], **LICENSED).get_json()["track"]
+    assert own_bed["scope"] == "organization" and own_bed["badge"] is None
+
+    tracks = client.get(f"/api/backing-tracks?rhythm_id={clave['id']}", headers=h).get_json()
+    in_use = {t["id"]: t["in_use"] for t in tracks["tracks"]}
+    assert in_use == {lib_bed["id"]: False, lib_full["id"]: True, own_bed["id"]: True}
+    assert [t["scope"] for t in tracks["tracks"]][:2] == ["library", "library"]  # library first
+    music = new_round(client, h, sess, clave, t1)["reference"]["music"]
+    assert music["bed"]["id"] == own_bed["id"] and music["full"]["id"] == lib_full["id"]
+
+    # The super-admin's own organization still sees the library loop for "bed".
+    sup_view = client.get(f"/api/backing-tracks?rhythm_id={clave['id']}", headers=sup).get_json()
+    assert {t["id"] for t in sup_view["tracks"]} == {lib_bed["id"], lib_full["id"]}
+    assert all(t["in_use"] for t in sup_view["tracks"])
+
+    # Removing the org's own loop falls back to the library again.
+    client.delete(f"/api/backing-tracks/{own_bed['id']}", headers=h)
+    music = new_round(client, h, sess, clave, t1)["reference"]["music"]
+    assert music["bed"]["id"] == lib_bed["id"]
+
+
+def test_music_level_of_a_library_track_is_per_organization(client):
+    h, sess, clave, t1, _ = setup_class(client)
+    sup = make_superadmin(client)
+    lib = upload(client, sup, clave["id"], scope="library", **LICENSED).get_json()["track"]
+    assert measure_music(client, h, sess, lib["id"]).status_code == 201
+    profile = MusicBleedProfile.query.one()
+    assert profile.organization_id == 1  # the measuring org, not the library
+
+    # This org's turn over the library groove uses its own measurement.
+    body = music_turn(client, h, sess, clave, t1, lib["id"], seed=3).get_json()
+    assert body["round"]["backing_track_id"] == lib["id"]
+    assert body["score"]["needs_review"] is False
+    assert body["score"]["machine"]["total"] >= 95
+
+    # Another organization hasn't measured its room yet: its listing shows no music level.
+    other = client.get(f"/api/backing-tracks?rhythm_id={clave['id']}", headers=sup).get_json()
+    assert other["tracks"][0]["music_level"] is None
+    mine = client.get(f"/api/backing-tracks?rhythm_id={clave['id']}", headers=h).get_json()
+    assert mine["tracks"][0]["music_level"] is not None
+
+
+def test_superadmin_is_also_an_admin_of_its_own_organization(client):
+    from app.seed import seed_library
+
+    seed_library()
+    sup = make_superadmin(client)
+    res = client.patch("/api/organization", json={"recording_retention_days": 3}, headers=sup)
+    assert res.status_code == 200
+    rid = client.get("/api/rhythms", headers=sup).get_json()["rhythms"][0]["id"]
+    assert upload(client, sup, rid, **LICENSED).get_json()["track"]["scope"] == "organization"
+
+
+def test_set_role_cli(app, client):
+    register(client, email="owner@eyeforge.example")
+    runner = app.test_cli_runner()
+    res = runner.invoke(args=["set-role", "Owner@EyeForge.example", "superadmin"])
+    assert res.exit_code == 0 and "admin -> superadmin" in res.output
+    assert Instructor.query.filter_by(email="owner@eyeforge.example").one().role == "superadmin"
+    res = runner.invoke(args=["set-role", "nobody@example.com", "admin"])
+    assert res.exit_code != 0 and "No instructor" in res.output
+    res = runner.invoke(args=["set-role", "owner@eyeforge.example", "owner"])
+    assert res.exit_code != 0

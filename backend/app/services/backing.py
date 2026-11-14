@@ -118,14 +118,18 @@ def _parse_metadata(form, rhythm: Rhythm, partial: bool = False) -> dict:
     return out
 
 
-def save_upload(org_id: int, instructor_id: int, rhythm: Rhythm, form, file) -> BackingTrack:
-    """Validate and store an uploaded WAV; replaces this org's track of the same version."""
+def save_upload(org_id: int | None, instructor_id: int, rhythm: Rhythm, form, file) -> BackingTrack:
+    """Validate and store an uploaded WAV; replaces the track of the same version at that level.
+
+    ``org_id=None`` uploads to the platform-wide Qi Rhythm Library (callers check permission).
+    """
     meta = _parse_metadata(form, rhythm)
     data = file.read() if file is not None else b""
     if not data:
         abort(400, "Please choose a WAV file to upload.")
     wav = inspect_wav(data)
-    key = f"backing/org-{org_id}/rhythm-{rhythm.id}/{meta['version']}-{uuid.uuid4().hex[:10]}.wav"
+    owner = "library" if org_id is None else f"org-{org_id}"
+    key = f"backing/{owner}/rhythm-{rhythm.id}/{meta['version']}-{uuid.uuid4().hex[:10]}.wav"
     storage = get_storage()
     storage.put(key, data, "audio/wav")
 
@@ -137,7 +141,8 @@ def save_upload(org_id: int, instructor_id: int, rhythm: Rhythm, form, file) -> 
         track = BackingTrack(organization_id=org_id, rhythm_id=rhythm.id, version=meta["version"])
         db.session.add(track)
     else:
-        # A new recording invalidates earlier "Measure music level" results.
+        # A new recording invalidates earlier "Measure music level" results (in every org, for
+        # a library track).
         MusicBleedProfile.query.filter_by(backing_track_id=track.id).delete()
     track.rhythm = rhythm
     track.bpm, track.bars = meta["bpm"], meta["bars"]
@@ -180,14 +185,32 @@ def delete_track(track: BackingTrack) -> None:
         pass
 
 
+def visible_tracks(org_id: int, rhythm_id: int | None = None):
+    """Query for the library tracks plus this organization's own tracks."""
+    q = BackingTrack.query.filter(
+        db.or_(BackingTrack.organization_id.is_(None), BackingTrack.organization_id == org_id)
+    )
+    if rhythm_id is not None:
+        q = q.filter(BackingTrack.rhythm_id == rhythm_id)
+    return q
+
+
 def usable_tracks(org_id: int, rhythm_id: int) -> dict[str, BackingTrack]:
-    rows = BackingTrack.query.filter_by(organization_id=org_id, rhythm_id=rhythm_id).all()
-    return {t.version: t for t in rows if t.usable}
+    """The track that plays for each version: the org's own usable loop, else the library's."""
+    out: dict[str, BackingTrack] = {}
+    for t in visible_tracks(org_id, rhythm_id).all():
+        if not t.usable:
+            continue
+        current = out.get(t.version)
+        if current is None or (current.is_library and not t.is_library):
+            out[t.version] = t
+    return out
 
 
-def latest_bleed(track: BackingTrack) -> MusicBleedProfile | None:
+def latest_bleed(track: BackingTrack, org_id: int) -> MusicBleedProfile | None:
+    """This organization's latest "Measure music level" result for the track."""
     return (
-        MusicBleedProfile.query.filter_by(backing_track_id=track.id)
+        MusicBleedProfile.query.filter_by(backing_track_id=track.id, organization_id=org_id)
         .order_by(MusicBleedProfile.created_at.desc(), MusicBleedProfile.id.desc())
         .first()
     )
@@ -195,6 +218,7 @@ def latest_bleed(track: BackingTrack) -> MusicBleedProfile | None:
 
 def measure_and_save(
     track: BackingTrack,
+    org_id: int,
     audio: bytes,
     *,
     bpm: float,
@@ -215,7 +239,7 @@ def measure_and_save(
     except Exception:  # noqa: BLE001
         abort(400, "We couldn't read that recording. Please try again.")
     row = MusicBleedProfile(
-        organization_id=track.organization_id,
+        organization_id=org_id,
         backing_track_id=track.id,
         session_id=session_id,
         profile=prof.to_dict(),

@@ -318,3 +318,19 @@ test("starting a new turn hides the previous team's score until the new one arri
   release();
   expect(await screen.findByRole('heading', { name: /Sunflowers: 99 points/ })).toBeInTheDocument();
 });
+
+test('library loops are marked as Qi Rhythm Originals; the org’s own loop wins', async () => {
+  const lib = { ...bedTrack, id: 30, scope: 'library', badge: 'Qi Rhythm Original' };
+  classWithTracks([
+    { ...lib, in_use: false },
+    { ...bedTrack, in_use: true },
+    { ...fullTrack, id: 31, scope: 'library', badge: 'Qi Rhythm Original', in_use: true },
+  ]);
+  renderApp(<ClassPage />);
+  await userEvent.click(await screen.findByRole('button', { name: /Son Clave 3-2/ }));
+  expect(await screen.findByText('★ Qi Rhythm Original')).toBeInTheDocument();
+  expect(screen.getByText(/From the Qi Rhythm Library/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: /Measure music level/ }));
+  // The groove that plays (and gets measured) is the organization's own, not the library's.
+  expect(measureMusicLevel.mock.calls.at(-1)[0].bed.id).toBe(bedTrack.id);
+});

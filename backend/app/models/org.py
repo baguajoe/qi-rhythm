@@ -4,7 +4,10 @@ from ..extensions import db
 from .base import utcnow
 
 ORG_TYPES = ("senior_center", "assisted_living", "community_org", "adult_day", "other")
-ROLES = ("admin", "instructor")
+# superadmin = the Qi Rhythm team (Eye Forge Studios): also an admin of its own organization, and
+# the only role that can change the platform-wide Qi Rhythm Library. Granted only from the server
+# command line (`flask --app wsgi set-role EMAIL superadmin`), never through the API.
+ROLES = ("admin", "instructor", "superadmin")
 
 
 class Organization(db.Model):
@@ -48,6 +51,14 @@ class Instructor(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     organization = db.relationship("Organization", back_populates="instructors")
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role in ("admin", "superadmin")
+
+    @property
+    def is_superadmin(self) -> bool:
+        return self.role == "superadmin"
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)

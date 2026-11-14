@@ -1,10 +1,15 @@
 import Button from '../../components/Button.jsx';
 import Notice from '../../components/Notice.jsx';
+import { OriginalBadge } from '../music/MusicPage.jsx';
 import styles from './ClassPage.module.css';
 
-/** Usable backing tracks for one rhythm, as { full, bed } (either may be null). */
+/**
+ * The backing tracks that play for one rhythm, as { full, bed } (either may be null). The server
+ * marks them `in_use`: the organization's own usable loop, else the Qi Rhythm Library's.
+ */
 export function musicFromTracks(tracks) {
-  const usable = (v) => tracks.find((t) => t.version === v && t.usable) || null;
+  const usable = (v) =>
+    tracks.find((t) => t.version === v && t.usable && (t.in_use ?? true)) || null;
   const full = usable('full');
   const bed = usable('bed');
   return full || bed ? { full, bed } : null;
@@ -28,6 +33,12 @@ export default function MusicPanel({ rhythm, music, musicOn, busy, measuring, on
       {music && musicOn && (
         <>
           <p>{describe(music)}</p>
+          {[music.full, music.bed].some((t) => t?.badge) && (
+            <p>
+              <OriginalBadge track={[music.full, music.bed].find((t) => t?.badge)} /> From the Qi
+              Rhythm Library.
+            </p>
+          )}
           {bed && (
             <>
               {bed.music_level ? (

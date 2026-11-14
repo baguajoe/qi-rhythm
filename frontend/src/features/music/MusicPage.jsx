@@ -5,6 +5,7 @@ import Field from '../../components/Field.jsx';
 import Notice from '../../components/Notice.jsx';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { isAdmin as isAdminRole, isSuperadmin } from '../auth/roles.js';
 import { useLibrary } from '../library/useLibrary.js';
 import styles from './MusicPage.module.css';
 
@@ -32,6 +33,30 @@ export function expectedSeconds(bpm, bars, perBar) {
   const n = Number(bars);
   if (!(b > 0) || !(n > 0)) return null;
   return (n * perBar * 60) / b;
+}
+
+export const LIBRARY_BADGE = 'Qi Rhythm Original';
+
+/** Badge marking a track from the platform-wide Qi Rhythm Library. */
+export function OriginalBadge({ track }) {
+  if (!track?.badge) return null;
+  return <span className={styles.badge}>★ {track.badge}</span>;
+}
+
+function status(track) {
+  if (!track.usable) return ['Not ready yet', styles.notReady];
+  if (track.in_use) return ['Plays in your classes', styles.ready];
+  return ['Not playing: your own loop is used instead', styles.notReady];
+}
+
+function TrackHeading({ track, id }) {
+  const [label, cls] = status(track);
+  return (
+    <h3 id={id}>
+      {VERSION_LABEL[track.version]} <OriginalBadge track={track} />{' '}
+      <span className={cls}>{label}</span>
+    </h3>
+  );
 }
 
 function plural(n, word) {
@@ -149,12 +174,7 @@ function TrackCard({ track, onChanged, onDeleted }) {
 
   return (
     <article className={styles.track} aria-labelledby={titleId}>
-      <h3 id={titleId}>
-        {VERSION_LABEL[track.version]}{' '}
-        <span className={track.usable ? styles.ready : styles.notReady}>
-          {track.usable ? 'Ready for classes' : 'Not ready yet'}
-        </span>
-      </h3>
+      <TrackHeading track={track} id={titleId} />
       <p className={styles.meta}>
         {track.original_filename || 'Uploaded WAV'} · {track.sample_rate / 1000} kHz ·{' '}
         {track.channels === 1 ? 'mono' : 'stereo'}
@@ -213,7 +233,20 @@ function TrackCard({ track, onChanged, onDeleted }) {
   );
 }
 
-function UploadForm({ rhythm, onUploaded }) {
+/** A track this person can play but not change (e.g. a Qi Rhythm Library loop). */
+function ReadOnlyTrack({ track }) {
+  const titleId = useId();
+  return (
+    <article className={styles.track} aria-labelledby={titleId}>
+      <TrackHeading track={track} id={titleId} />
+      <DurationLine track={track} />
+      {track.notes && <p>{track.notes}</p>}
+      {track.usable && <Preview key={track.rev} track={track} />}
+    </article>
+  );
+}
+
+function UploadForm({ rhythm, onUploaded, canLibrary, orgName }) {
   const perBar = beatsPerBar(rhythm.time_signature);
   const blank = useCallback(
     () => ({
@@ -224,6 +257,7 @@ function UploadForm({ rhythm, onUploaded }) {
       notes: '',
       source: '',
       license_notes: '',
+      scope: 'organization',
     }),
     [rhythm, perBar],
   );
@@ -247,7 +281,7 @@ function UploadForm({ rhythm, onUploaded }) {
     }
     const form = new FormData();
     form.append('audio', draft.file, draft.file.name);
-    for (const k of ['version', 'bpm', 'bars', 'notes', 'source', 'license_notes'])
+    for (const k of ['version', 'bpm', 'bars', 'notes', 'source', 'license_notes', 'scope'])
       form.append(k, String(draft[k] ?? ''));
     setBusy(true);
     try {
@@ -260,7 +294,9 @@ function UploadForm({ rhythm, onUploaded }) {
       setFileKey((k) => k + 1);
       setMsg({
         tone: 'success',
-        text: `Uploaded the ${VERSION_LABEL[track.version].toLowerCase()} loop.`,
+        text: `Uploaded the ${VERSION_LABEL[track.version].toLowerCase()} loop${
+          track.scope === 'library' ? ' to the Qi Rhythm Library' : ''
+        }.`,
       });
     } catch (err) {
       setMsg({ tone: 'error', text: err.message });
@@ -282,6 +318,33 @@ function UploadForm({ rhythm, onUploaded }) {
         accept=".wav,audio/wav,audio/x-wav,audio/wave"
         onChange={(e) => setDraft((d) => ({ ...d, file: e.target.files?.[0] || null }))}
       />
+      {canLibrary && (
+        <fieldset className={styles.versions}>
+          <legend>Add to</legend>
+          {[
+            [
+              'library',
+              'Qi Rhythm Library',
+              `Every organization gets it, marked “${LIBRARY_BADGE}”.`,
+            ],
+            ['organization', orgName || 'My organization', 'Only your organization’s classes.'],
+          ].map(([key, label, hint]) => (
+            <label key={key} className={styles.version}>
+              <input
+                type="radio"
+                name="scope"
+                value={key}
+                checked={draft.scope === key}
+                onChange={() => setDraft((d) => ({ ...d, scope: key }))}
+              />
+              <span>
+                <strong>{label}</strong>
+                <span className={styles.meta}>{hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       <fieldset className={styles.versions}>
         <legend>Version</legend>
         {VERSIONS.map(([key, label, hint]) => (
@@ -341,16 +404,28 @@ function UploadForm({ rhythm, onUploaded }) {
   );
 }
 
+function TrackList({ tracks, onChanged, uploads }) {
+  return tracks.map((t) =>
+    t.can_edit ? (
+      <TrackCard key={`${t.id}-${uploads}`} track={t} onChanged={onChanged} onDeleted={onChanged} />
+    ) : (
+      <ReadOnlyTrack key={t.id} track={t} />
+    ),
+  );
+}
+
 export default function MusicPage() {
   useDocumentTitle('Backing music');
-  const { instructor } = useAuth();
+  const { instructor, organization } = useAuth();
   const { genres, rhythms, error: libError } = useLibrary();
   const [rhythmId, setRhythmId] = useState('');
   const [tracks, setTracks] = useState([]);
   const [error, setError] = useState('');
   const [uploads, setUploads] = useState(0); // remount edit cards after a new file replaces one
+  const [version, setVersion] = useState(0); // bump to reload the list from the server
   const rhythm = rhythms.find((r) => String(r.id) === String(rhythmId)) || null;
-  const isAdmin = instructor?.role === 'admin';
+  const isAdmin = isAdminRole(instructor);
+  const canLibrary = isSuperadmin(instructor);
 
   useEffect(() => {
     if (!rhythmId) return undefined;
@@ -362,7 +437,9 @@ export default function MusicPage() {
     return () => {
       live = false;
     };
-  }, [rhythmId]);
+  }, [rhythmId, version]);
+  // Which loop plays depends on both levels, so always re-read after a change.
+  const reload = () => setVersion((v) => v + 1);
 
   const grouped = useMemo(
     () =>
@@ -371,21 +448,18 @@ export default function MusicPage() {
         .filter((g) => g.items.length),
     [genres, rhythms],
   );
-
-  const replace = (t) =>
-    setTracks((ts) =>
-      [...ts.filter((x) => x.id !== t.id && x.version !== t.version), t].sort((a, b) =>
-        a.version.localeCompare(b.version),
-      ),
-    );
+  const library = tracks.filter((t) => t.scope === 'library');
+  const own = tracks.filter((t) => t.scope !== 'library');
 
   return (
     <>
       <h1>Backing music</h1>
       <p>
-        Add your own loops to a rhythm. The <strong>full</strong> version plays while the team
-        listens; the <strong>groove only</strong> version plays under the team&apos;s turn. Rhythms
-        without loops use the built-in drum sounds.
+        The <strong>full</strong> version of a loop plays while the team listens; the{' '}
+        <strong>groove only</strong> version plays under the team&apos;s turn. Every organization
+        gets the loops in the <strong>Qi Rhythm Library</strong> (marked{' '}
+        <span className={styles.badge}>★ {LIBRARY_BADGE}</span>). Your own loops play instead of the
+        library&apos;s. Rhythms without loops use the built-in drum sounds.
       </p>
       {!isAdmin && <Notice tone="info">Only an admin can add or change backing music.</Notice>}
       {(libError || error) && <Notice tone="error">{libError || error}</Notice>}
@@ -414,30 +488,33 @@ export default function MusicPage() {
 
       {rhythm && (
         <div className={styles.grid}>
-          <section className={styles.tracks} aria-labelledby="tracks-title">
-            <h2 id="tracks-title">Loops for {rhythm.title}</h2>
-            {tracks.length === 0 && <p>No loops yet. This rhythm uses the built-in drum sounds.</p>}
-            {tracks.map((t) =>
-              isAdmin ? (
-                <TrackCard
-                  key={`${t.id}-${uploads}`}
-                  track={t}
-                  onChanged={replace}
-                  onDeleted={(id) => setTracks((ts) => ts.filter((x) => x.id !== id))}
-                />
-              ) : (
-                <article key={t.id} className={styles.track}>
-                  <h3>{VERSION_LABEL[t.version]}</h3>
-                  <DurationLine track={t} />
-                </article>
-              ),
-            )}
-          </section>
+          <div className={styles.tracks}>
+            <section className={styles.tracks} aria-labelledby="library-title">
+              <h2 id="library-title">Qi Rhythm Library</h2>
+              <p className={styles.meta}>From Eye Forge Studios, for every organization.</p>
+              {library.length === 0 && <p>No library loops for {rhythm.title} yet.</p>}
+              <TrackList tracks={library} onChanged={reload} uploads={uploads} />
+            </section>
+            <section className={styles.tracks} aria-labelledby="own-title">
+              <h2 id="own-title">Your organization&apos;s loops</h2>
+              {own.length === 0 && (
+                <p>
+                  None yet.{' '}
+                  {library.length === 0
+                    ? 'This rhythm uses the built-in drum sounds.'
+                    : 'Your classes use the library loops above.'}
+                </p>
+              )}
+              <TrackList tracks={own} onChanged={reload} uploads={uploads} />
+            </section>
+          </div>
           {isAdmin && (
             <UploadForm
               rhythm={rhythm}
-              onUploaded={(t) => {
-                replace(t);
+              canLibrary={canLibrary}
+              orgName={organization?.name}
+              onUploaded={() => {
+                reload();
                 setUploads((n) => n + 1);
               }}
             />

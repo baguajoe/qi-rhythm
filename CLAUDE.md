@@ -38,6 +38,7 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 # Production server locally (from backend/)
 SOCKETIO_ASYNC_MODE=gevent PORT=8001 .venv/bin/gunicorn -c gunicorn.conf.py wsgi:app
 .venv/bin/flask --app wsgi purge-recordings [--all]   # retention purge (daily cron in prod)
+.venv/bin/flask --app wsgi set-role EMAIL superadmin   # the ONLY way to grant super-admin
 
 # Everything (from repo root): starts Postgres, runs pytest + Vitest + Playwright, stops Postgres
 make test-all            # or: cd frontend && npm run test:all
@@ -82,7 +83,9 @@ npm run build
 ## Round flow
 Dashboard → `POST /api/sessions/<id>/rounds` → `PATCH /api/rounds/<id> {status: playing_reference}`
 → Tone.js plays reference → `PATCH {status: recording}` → recorder starts, count-in clicks, team plays,
-1 bar slack → `POST /api/rounds/<id>/recording` (WAV + `countin_start_s` = count-in click 1 time −
+1 bar slack (the count-in schedule has a silent `go` cue on the pattern's first beat — the beat
+after the final count — which shows "Your turn!" and sends `control:recording`) →
+`POST /api/rounds/<id>/recording` (WAV + `countin_start_s` = count-in click 1 time −
 first recorded sample time, both on the shared AudioContext clock) → backend stores (R2/local),
 analyses via the round's GameMode, saves Score, recomputes Team.total_points, broadcasts
 `round:scored` + `scoreboard:updated`. Overrides keep the machine score (`Score.override_values`).
@@ -90,6 +93,14 @@ Retention: run `flask --app wsgi purge-recordings` daily (cron); `--all` deletes
 No speech is spoken while recording (it would be heard as hits).
 
 ## Backing tracks
+- Two levels. **Qi Rhythm Library** = `organization_id IS NULL`: owned by Eye Forge Studios,
+  available to every organization, badge "Qi Rhythm Original"; only `superadmin` can upload
+  (`scope=library`), edit or delete. **Organization tracks**: that org's admins (and a
+  super-admin within its own org). Per version, an org's own usable loop plays instead of the
+  library's (`services.backing.usable_tracks`; listing marks `in_use` and `can_edit`).
+  Roles: instructor < admin < superadmin (`Instructor.is_admin` / `is_superadmin`); super-admin
+  is granted only via `flask set-role`, never via the API. Music-level measurements are always
+  per organization (rooms differ), even for library tracks.
 - Admins upload WAV loops (44.1/48 kHz, validated with soundfile) per rhythm on `/music`:
   version `full` (pattern audible) or `bed` (groove only), BPM, bars, notes, `source`
   (original/commissioned/licensed) + `license_notes`. One track per (org, rhythm, version);
@@ -134,7 +145,10 @@ No speech is spoken while recording (it would be heard as hits).
   01 register/login/room setup/teams → 02 perfect take + live TV + axe → 03 two missed hits →
   04 silence review prompt + override + TV drop/resync → 05 repeated reconnect stress (own org) →
   06 upload full + groove loops on /music, add licenses, Measure music level (mic = groove alone,
-  `music-measure.wav`) → 07 team turn over the groove (`music-turn.wav`): >= 95, no extras.
+  `music-measure.wav`) → 07 team turn over the groove (`music-turn.wav`): >= 95, no extras →
+  08 super-admin (granted via `flask set-role`) publishes a library loop; the spec-01 org admin
+  can't upload to the library but sees the loop read-only with the badge on /music and in class.
+  Spec 02 also checks "1" → "Your turn!" on the dashboard is one beat (667 ms ± 120).
 - Score thresholds are NOT widened: perfect take must be >= 95 (observed 100 on every run; browser
   timing offsets were 40–90 ms and are absorbed by offset correction). If a slow CI runner ever
   makes this flaky, set `E2E_PERFECT_MIN` (test-only) rather than changing the engine.

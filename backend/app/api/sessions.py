@@ -211,7 +211,7 @@ def purge(me: Instructor):
 @bp.patch("/organization")
 @instructor_required
 def update_org(me: Instructor):
-    if me.role != "admin":
+    if not me.is_admin:
         abort(403, "Only an admin can change organization settings.")
     data = json_body()
     if "recording_retention_days" in data:

@@ -3,6 +3,11 @@
 "full" = the groove with the pattern audible (played while the team listens);
 "bed"  = the groove only (played under the team's turn; the mic hears it, see audio/bleed.py).
 A track can be used in a class only once its source and license notes are filled in.
+
+Two levels: tracks with ``organization_id IS NULL`` form the platform-wide Qi Rhythm Library
+(owned by Eye Forge Studios, changed only by super-admins, available to every organization);
+tracks with an organization are that organization's private loops and, per version, play
+instead of the library's.
 """
 
 from ..extensions import db
@@ -10,6 +15,9 @@ from .base import utcnow
 
 TRACK_VERSIONS = ("full", "bed")
 TRACK_SOURCES = ("original", "commissioned", "licensed")
+LIBRARY_NAME = "Qi Rhythm Library"
+LIBRARY_OWNER = "Eye Forge Studios"
+LIBRARY_BADGE = "Qi Rhythm Original"
 
 
 def beats_per_bar(time_signature: str) -> float:
@@ -26,11 +34,21 @@ def beats_per_bar(time_signature: str) -> float:
 class BackingTrack(db.Model):
     __tablename__ = "backing_tracks"
     __table_args__ = (
+        # One private track per (org, rhythm, version)...
         db.UniqueConstraint("organization_id", "rhythm_id", "version", name="uq_backing_version"),
+        # ...and one library track per (rhythm, version) (NULLs are distinct in the constraint).
+        db.Index(
+            "uq_backing_library_version",
+            "rhythm_id",
+            "version",
+            unique=True,
+            postgresql_where=db.text("organization_id IS NULL"),
+        ),
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    organization_id = db.Column(db.ForeignKey("organizations.id"), nullable=False, index=True)
+    # NULL = Qi Rhythm Library (platform-wide)
+    organization_id = db.Column(db.ForeignKey("organizations.id"), nullable=True, index=True)
     rhythm_id = db.Column(db.ForeignKey("rhythms.id"), nullable=False, index=True)
     version = db.Column(
         db.Enum(*TRACK_VERSIONS, name="track_version", native_enum=False), nullable=False
@@ -53,6 +71,10 @@ class BackingTrack(db.Model):
     rhythm = db.relationship("Rhythm")
 
     @property
+    def is_library(self) -> bool:
+        return self.organization_id is None
+
+    @property
     def loop_beats(self) -> float:
         return self.bars * self.beats_per_bar
 
@@ -69,6 +91,8 @@ class BackingTrack(db.Model):
             "id": self.id,
             "rhythm_id": self.rhythm_id,
             "version": self.version,
+            "scope": "library" if self.is_library else "organization",
+            "badge": LIBRARY_BADGE if self.is_library else None,
             "bpm": self.bpm,
             "bars": self.bars,
             "beats_per_bar": self.beats_per_bar,
@@ -94,6 +118,8 @@ class BackingTrack(db.Model):
         return {
             "id": self.id,
             "version": self.version,
+            "scope": "library" if self.is_library else "organization",
+            "badge": LIBRARY_BADGE if self.is_library else None,
             "bpm": self.bpm,
             "loop_beats": self.loop_beats,
             "loop_seconds": round(self.expected_duration_s, 5),
@@ -103,7 +129,10 @@ class BackingTrack(db.Model):
 
 
 class MusicBleedProfile(db.Model):
-    """'Measure music level' result: how the bed track sounds at the room mic (no audio kept)."""
+    """'Measure music level' result: how the bed track sounds at the room mic (no audio kept).
+
+    Always belongs to the organization that measured it (rooms differ), even for library tracks.
+    """
 
     __tablename__ = "music_bleed_profiles"
 

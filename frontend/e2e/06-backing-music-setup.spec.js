@@ -30,7 +30,7 @@ test('admin uploads loops, adds licenses, and measures the music level', async (
   await expect(page.getByRole('heading', { name: 'Backing music', level: 1 })).toBeVisible();
   const { id: clave } = (await apiGet(page, '/api/rhythms')).rhythms.find((r) => r.title === CLAVE);
   await page.getByLabel('Rhythm').selectOption(String(clave));
-  await expect(page.getByText(/No loops yet/)).toBeVisible();
+  await expect(page.getByText(/No library loops for Son Clave 3-2 yet/)).toBeVisible();
 
   // Full version, licensed in the upload form.
   await page.getByLabel('WAV file').setInputFiles(resolve(WAV_DIR, 'groove-full.wav'));
@@ -40,7 +40,7 @@ test('admin uploads loops, adds licenses, and measures the music level', async (
   await page.getByRole('button', { name: 'Upload loop' }).click();
   await expect(page.getByText('Uploaded the full loop.')).toBeVisible();
   const full = page.getByRole('article', { name: /^Full/ });
-  await expect(full.getByText('Ready for classes')).toBeVisible();
+  await expect(full.getByText('Plays in your classes')).toBeVisible();
   await expect(full.getByText('✓ matches')).toBeVisible();
 
   // Groove only, 1 bar, uploaded without a license: not usable until the notes are added.
@@ -55,7 +55,7 @@ test('admin uploads loops, adds licenses, and measures the music level', async (
   await bed.getByLabel('Where is this track from?').selectOption('commissioned');
   await bed.getByLabel(/License notes/).fill('Commissioned groove, live class use allowed.');
   await bed.getByRole('button', { name: 'Save changes' }).click();
-  await expect(bed.getByText('Ready for classes')).toBeVisible();
+  await expect(bed.getByText('Plays in your classes')).toBeVisible();
   await expectNoSeriousA11yIssues(page, 'backing music page');
 
   // The loop plays in the browser (decoded through the API with the instructor's token).

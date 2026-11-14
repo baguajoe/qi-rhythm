@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext.jsx';
+import { isAdmin } from '../features/auth/roles.js';
 import { useSettings } from '../app/settings.jsx';
 import Button from './Button.jsx';
 import styles from './Layout.module.css';
@@ -30,7 +31,7 @@ export default function Layout() {
         </div>
         <nav aria-label="Main">
           <ul className={styles.nav}>
-            {[...LINKS, ...(instructor?.role === 'admin' ? ADMIN_LINKS : [])].map(([to, label]) => (
+            {[...LINKS, ...(isAdmin(instructor) ? ADMIN_LINKS : [])].map(([to, label]) => (
               <li key={to}>
                 <NavLink
                   to={to}

@@ -74,7 +74,7 @@ class RhythmRecall(GameMode):
         if track is not None and round_.music_start_s is not None:
             from ..services.backing import latest_bleed
 
-            measured = latest_bleed(track)
+            measured = latest_bleed(track, round_.session.organization_id)
             if measured is None:
                 music_unmeasured = True
             else:

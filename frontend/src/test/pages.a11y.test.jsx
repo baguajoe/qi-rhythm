@@ -125,7 +125,7 @@ const track = (over) => ({
   ...over,
 });
 const tracks = [
-  track(),
+  track({ scope: 'library', badge: 'Qi Rhythm Original', in_use: true, can_edit: false }),
   track({
     id: 21,
     version: 'bed',
@@ -133,6 +133,7 @@ const tracks = [
     source: null,
     license_notes: '',
     usable: false,
+    can_edit: true,
     warnings: [
       'The file is 6.10 s long, but 2 bars at 90 BPM should be 5.33 s.',
       'Add the source and license notes before this track can be used in a class.',
