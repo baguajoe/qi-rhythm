@@ -10,6 +10,7 @@ const LINKS = [
   ['/library', 'Rhythms'],
   ['/calibration', 'Room setup'],
 ];
+const ADMIN_LINKS = [['/music', 'Backing music']];
 
 export default function Layout() {
   const { instructor, organization, logout } = useAuth();
@@ -29,7 +30,7 @@ export default function Layout() {
         </div>
         <nav aria-label="Main">
           <ul className={styles.nav}>
-            {LINKS.map(([to, label]) => (
+            {[...LINKS, ...(instructor?.role === 'admin' ? ADMIN_LINKS : [])].map(([to, label]) => (
               <li key={to}>
                 <NavLink
                   to={to}

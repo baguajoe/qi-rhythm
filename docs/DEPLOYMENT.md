@@ -32,6 +32,12 @@
 
 Do **not** set `DEMO_EMAIL`/`DEMO_PASSWORD` or run `seed --demo` in production.
 
+Storage layout in the bucket: `recordings/…` (team takes, deleted by the retention purge) and
+`backing/org-<id>/rhythm-<id>/…` (backing-track loops uploaded on the Backing music page; never
+purged, deleted only when an admin deletes or replaces a loop). Loops are streamed to the class
+page through the API (`GET /api/backing-tracks/<id>/audio`), so the bucket stays private. Uploads
+are capped at 25 MB (`MAX_CONTENT_LENGTH`); a 16-bit or 24-bit loop of a few bars fits easily.
+
 ## Frontend → Vercel
 
 1. Import the repo with **root directory `frontend/`** (framework: Vite). `frontend/vercel.json`

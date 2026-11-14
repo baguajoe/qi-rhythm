@@ -53,6 +53,12 @@ ROUTES = {
     ("GET", "/api/activities"): INSTRUCTOR,
     ("POST", "/api/activities"): INSTRUCTOR,
     ("DELETE", "/api/activities/<int:activity_id>"): INSTRUCTOR,
+    ("GET", "/api/backing-tracks"): INSTRUCTOR,
+    ("POST", "/api/rhythms/<int:rhythm_id>/backing-tracks"): INSTRUCTOR,
+    ("PATCH", "/api/backing-tracks/<int:track_id>"): INSTRUCTOR,
+    ("DELETE", "/api/backing-tracks/<int:track_id>"): INSTRUCTOR,
+    ("GET", "/api/backing-tracks/<int:track_id>/audio"): INSTRUCTOR,
+    ("POST", "/api/backing-tracks/<int:track_id>/bleed"): INSTRUCTOR,
 }
 
 
@@ -193,6 +199,17 @@ def test_every_route_has_a_happy_path(app, client):
         ok(act, 201)
         ok(client.get("/api/activities", headers=h))
         ok(client.delete(f"/api/activities/{act.get_json()['activity']['id']}", headers=h))
+        from .test_backing_api import LICENSED, measure_music, upload
+
+        bed = upload(client, h, clave["id"])
+        ok(bed, 201)
+        tid = bed.get_json()["track"]["id"]
+        ok(client.get(f"/api/backing-tracks?rhythm_id={clave['id']}", headers=h))
+        ok(client.patch(f"/api/backing-tracks/{tid}", json=LICENSED, headers=h))
+        ok(client.get(f"/api/backing-tracks/{tid}/audio", headers=h))
+        ok(measure_music(client, h, sess, tid), 201)
+        ok(client.delete(f"/api/backing-tracks/{tid}", headers=h))
+
         ok(client.patch("/api/organization", json={"recording_retention_days": 5}, headers=h))
         ok(client.post("/api/recordings/purge", headers=h))
         ok(client.post(f"/api/sessions/{sid}/end", headers=h))

@@ -35,6 +35,17 @@ class OnsetParams:
     mask_window_s: float = 0.15  # an onset this soon after a louder strike...
     mask_drop_db: float = 9.0  # ...and this much quieter is treated as its decay/ring
     relative_gate_db: float = 30.0  # drop onsets this far below the typical strike level
+    # Backing-track bleed: (time_s, band_levels_db) of the bed's own transients as the mic hears
+    # them (see bleed.py). An onset within ``bleed_window_s`` of one is treated as the music unless
+    # some frequency band is at least ``bleed_margin_db`` louder than the music alone there, i.e.
+    # a team hit (a clap, a shaker, a drum) sounding on top of the bed's kick or hi-hat.
+    bleed: list[tuple[float, list[float]]] | None = None
+    bleed_window_s: float = 0.04
+    bleed_margin_db: float = 5.0
+    # The predicted bed times rely on the calibrated latency, which includes some human reaction
+    # time from the tap test. The bed's own repeating drums let us measure the remaining offset
+    # from the take itself, up to this far.
+    bleed_align_s: float = 0.12
 
 
 @dataclass
@@ -52,6 +63,7 @@ class OnsetResult:
     snr_db: float
     duration_s: float
     rejected: list[Onset] = field(default_factory=list)  # gated below noise floor
+    bleed_shift_s: float = 0.0  # measured offset applied to the predicted backing-track times
 
     @property
     def times(self) -> np.ndarray:
@@ -87,6 +99,27 @@ def highpass(y: np.ndarray, sr: int, cutoff: float) -> np.ndarray:
         return y
     sos = butter(4, cutoff, btype="high", fs=sr, output="sos")
     return sosfiltfilt(sos, y).astype(np.float32)
+
+
+BAND_EDGES_HZ = (70.0, 300.0, 1000.0, 3000.0, 7000.0, 11000.0)
+BAND_PRE_S = 0.01  # start a little before the onset so a few ms of timing slop does not matter
+BAND_WINDOW_S = 0.075
+
+
+def band_levels_db(y: np.ndarray, sr: int, t: float, window_s: float | None = None) -> np.ndarray:
+    """Energy (dB) per frequency band around an onset at ``t`` (from 10 ms before)."""
+    window_s = BAND_WINDOW_S if window_s is None else window_s
+    a = max(0, int((t - BAND_PRE_S) * sr))
+    seg = y[a : a + int(window_s * sr)]
+    if len(seg) < 16:
+        return np.full(len(BAND_EDGES_HZ) - 1, SILENCE_DB)
+    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n=2048)) ** 2
+    freqs = np.fft.rfftfreq(2048, 1.0 / sr)
+    out = []
+    for lo, hi in zip(BAND_EDGES_HZ[:-1], BAND_EDGES_HZ[1:], strict=True):
+        sel = (freqs >= lo) & (freqs < hi)
+        out.append(10.0 * np.log10(max(float(spec[sel].sum()) / len(seg), 1e-12)))
+    return np.array(out)
 
 
 def _db(x: np.ndarray | float) -> np.ndarray | float:
@@ -163,6 +196,34 @@ def detect_onsets(
     rms_db = frame_rms_db(y, frame=512, hop=64)
     rms_fps = sr / 64
 
+    bleed_shift = 0.0
+    if p.bleed:
+        bleed_sorted = sorted(p.bleed, key=lambda b: b[0])
+        bleed_t = np.array([b[0] for b in bleed_sorted], dtype=float)
+        bleed_bands = np.array([b[1] for b in bleed_sorted], dtype=float)
+        t_peaks = librosa.frames_to_time(frames, sr=sr, hop_length=HOP)
+        t_backs = librosa.frames_to_time(back, sr=sr, hop_length=HOP)
+        candidates = np.array(
+            [
+                _refine(y_env, sr, max(a, b), lo_bound=b - 0.01)
+                for a, b in zip(t_peaks, t_backs, strict=True)
+            ]
+        )
+        bleed_shift = estimate_bleed_shift(candidates, bleed_t, p.bleed_align_s)
+        bleed_t = bleed_t + bleed_shift
+
+    def is_bleed(t: float) -> bool:
+        """Near a known bed transient and no louder than it in any band (+ margin)."""
+        if not p.bleed:
+            return False
+        lo = np.searchsorted(bleed_t, t - p.bleed_window_s, side="left")
+        hi = np.searchsorted(bleed_t, t + p.bleed_window_s, side="right")
+        if hi <= lo:
+            return False
+        bands = band_levels_db(y, sr, t)
+        music = bleed_bands[lo:hi].max(axis=0)
+        return bool(np.all(bands < music + p.bleed_margin_db))
+
     accepted: list[Onset] = []
     rejected: list[Onset] = []
     prev = 0.0
@@ -177,7 +238,8 @@ def detect_onsets(
             0 < t - a.time_s <= p.mask_window_s and a.level_db - level >= p.mask_drop_db
             for a in accepted[-3:]
         )
-        if level >= max(floor + p.gate_margin_db, ABS_MIN_DB) and not masked:
+        loud_enough = level >= max(floor + p.gate_margin_db, ABS_MIN_DB)
+        if loud_enough and not masked and not is_bleed(t):
             accepted.append(onset)
             prev = t + p.min_gap_s / 2
         else:
@@ -190,7 +252,43 @@ def detect_onsets(
         accepted = keep
 
     confidence, snr = _confidence(accepted, floor, p.threshold)
-    return OnsetResult(accepted, confidence, floor, snr, duration, rejected)
+    return OnsetResult(accepted, confidence, floor, snr, duration, rejected, bleed_shift)
+
+
+def estimate_bleed_shift(
+    onset_times: np.ndarray, bleed_times: np.ndarray, search_s: float, tol_s: float = 0.012
+) -> float:
+    """Offset (s) that best lines the predicted bed transients up with the detected onsets.
+
+    The bed's drums repeat many times per take while the team's hits are few, so the offset that
+    matches the most onsets is the bed's. Returns 0 when there isn't enough evidence.
+    """
+    if len(onset_times) == 0 or len(bleed_times) == 0 or search_s <= 0:
+        return 0.0
+    lo, hi = bleed_times.min() - search_s, bleed_times.max() + search_s
+    times = np.asarray(onset_times, dtype=float)
+    times = times[(times >= lo) & (times <= hi)]
+    if len(times) == 0:
+        return 0.0
+    idx = np.clip(np.searchsorted(bleed_times, times), 1, len(bleed_times) - 1)
+    nearest = np.where(
+        np.abs(times - bleed_times[idx - 1]) <= np.abs(times - bleed_times[idx]),
+        bleed_times[idx - 1],
+        bleed_times[idx],
+    )
+    d = times - nearest
+    d = d[np.abs(d) <= search_s]
+    if len(d) == 0:
+        return 0.0
+    grid = np.arange(-search_s, search_s + 1e-9, 0.002)
+    counts = np.array([np.sum(np.abs(d - g) <= tol_s) for g in grid])
+    best = counts.max()
+    if best < max(3, 0.25 * len(bleed_times)):
+        return 0.0
+    winners = grid[counts == best]
+    g = float(winners[np.argmin(np.abs(winners))])
+    near = d[np.abs(d - g) <= tol_s]
+    return round(float(np.median(near)), 4)
 
 
 def _confidence(onsets: list[Onset], floor_db: float, threshold: float) -> tuple[float, float]:

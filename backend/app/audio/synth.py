@@ -38,6 +38,12 @@ class SynthOptions:
     count_in_clicks: bool = False  # simulate speaker bleed of the count-in
     click_level: float = 0.3
     voice: str | None = None  # override every event's voice
+    # Backing-track ("bed") bleed: a looping groove heard by the room mic under the team.
+    bed: dict | None = None  # {"events": [{"beat", "voice"}], "loop_beats": 4} (see DEFAULT_BED)
+    bed_level: float = 0.0  # peak gain of the bed's drum hits (0 = no bed)
+    bed_pad_level: float = 0.0  # RMS of the bed's sustained bass/chord pad
+    bed_offset_ms: float = 0.0  # bed start relative to the count-in downbeat
+    team_silent: bool = False  # render only count-in/bed (e.g. a "Measure music level" pass)
     seed: int = 0
 
 
@@ -49,6 +55,8 @@ class SynthResult:
     hit_times: list[float] = field(default_factory=list)  # actual rendered hit onsets
     missed_indices: list[int] = field(default_factory=list)
     extra_times: list[float] = field(default_factory=list)
+    bed_start_s: float | None = None  # scheduled bed beat 0 in recording time (before latency)
+    bed_times: list[float] = field(default_factory=list)  # rendered bed drum hits
 
     def write(self, path) -> None:
         write_wav(path, self.audio, self.sr)
@@ -101,8 +109,24 @@ def _click(sr: int) -> np.ndarray:
     return np.sin(2 * np.pi * 1000 * t) * np.exp(-t / 0.008)
 
 
+def _hat(sr: int, rng: np.random.Generator) -> np.ndarray:
+    n = int(sr * 0.06)
+    t = np.arange(n) / sr
+    out = _bandpass(rng.standard_normal(n), sr, 6000, 12000) * np.exp(-t / 0.012)
+    return out / np.max(np.abs(out))
+
+
+def _snare(sr: int, rng: np.random.Generator) -> np.ndarray:
+    n = int(sr * 0.25)
+    t = np.arange(n) / sr
+    tone = np.sin(2 * np.pi * 190 * t) * np.exp(-t / 0.05)
+    noise = _bandpass(rng.standard_normal(n), sr, 1500, 8000) * np.exp(-t / 0.06)
+    out = (0.6 * tone + noise) * np.minimum(1.0, t / 0.001)
+    return out / np.max(np.abs(out))
+
+
 def voice_sample(voice: str, sr: int, rng: np.random.Generator) -> np.ndarray:
-    if voice == "low":
+    if voice in ("low", "kick"):
         return _drum(sr, 110.0, 0.12, rng)
     if voice == "high":
         return _drum(sr, 300.0, 0.07, rng)
@@ -110,10 +134,61 @@ def voice_sample(voice: str, sr: int, rng: np.random.Generator) -> np.ndarray:
         return _shaker(sr, rng)
     if voice == "clap":
         return _clap(sr, rng)
+    if voice == "hat":
+        return _hat(sr, rng)
+    if voice == "snare":
+        return _snare(sr, rng)
     raise ValueError(f"unknown voice {voice!r}")
 
 
+# A typical backing-track groove: kick on 1 and 3, snare on 2 and 4, eighth-note hi-hats.
+# Every eighth note coincides with a hat, so it is a hard case for telling claps from the bed.
+DEFAULT_BED = {
+    "loop_beats": 4,
+    "events": [
+        {"beat": 0, "voice": "kick"},
+        {"beat": 2, "voice": "kick"},
+        {"beat": 1, "voice": "snare"},
+        {"beat": 3, "voice": "snare"},
+        *({"beat": b / 2, "voice": "hat", "gain": 0.45} for b in range(8)),
+    ],
+}
+
+
 # ---------------------------------------------------------------- rendering
+
+
+def _render_bed(buf: np.ndarray, start: float, spb: float, opts: SynthOptions, rng) -> list[float]:
+    """Loop the bed groove from ``start`` to the end of the buffer (speaker bleed into the mic)."""
+    sr = opts.sr
+    bed = opts.bed or DEFAULT_BED
+    loop = float(bed.get("loop_beats", 4))
+    end_s = len(buf) / sr
+    times = []
+    if opts.bed_level > 0:
+        samples = {v: voice_sample(v, sr, rng) for v in sorted({e["voice"] for e in bed["events"]})}
+        k = 0
+        while start + k * loop * spb < end_s:
+            for ev in bed["events"]:
+                t = start + (k * loop + float(ev["beat"])) * spb
+                if t < end_s:
+                    _mix(buf, samples[ev["voice"]], t, sr, opts.bed_level * ev.get("gain", 1.0))
+                    times.append(t)
+            k += 1
+    if opts.bed_pad_level > 0:
+        # Sustained bass + chord pad from the bed's start, re-articulated softly every bar.
+        n0 = max(0, int(start * sr))
+        t = np.arange(len(buf) - n0) / sr
+        pad = (
+            np.sin(2 * np.pi * 98 * t)
+            + 0.6 * np.sin(2 * np.pi * 196 * t)
+            + 0.4 * np.sin(2 * np.pi * 247 * t)
+            + 0.3 * np.sin(2 * np.pi * 294 * t)
+        )
+        swell = 0.75 + 0.25 * np.cos(2 * np.pi * t / (loop * spb))
+        pad *= swell
+        buf[n0:] += pad / (np.std(pad) + 1e-12) * opts.bed_pad_level
+    return sorted(times)
 
 
 def _performed_offset(beat: float, spb: float, length: float, opts: SynthOptions) -> float:
@@ -161,8 +236,16 @@ def render(pattern: dict, opts: SynthOptions | None = None) -> SynthResult:
     else:
         missed = []
 
+    bed_start = None
+    bed_times: list[float] = []
+    if opts.bed_level > 0 or opts.bed_pad_level > 0:
+        bed_start = opts.lead_in_s + opts.bed_offset_ms / 1000.0  # scheduled (like countin_start_s)
+        bed_times = _render_bed(buf, bed_start + latency, spb, opts, rng)
+
     hit_times = []
     for ev in events:
+        if opts.team_silent:
+            break
         if ev.index in missed:
             continue
         t = pattern_start + _performed_offset(ev.beat, spb, length, opts)
@@ -177,7 +260,7 @@ def render(pattern: dict, opts: SynthOptions | None = None) -> SynthResult:
     span_start = pattern_start
     span_end = pattern_start + length * spb
     attempts = 0
-    while len(extra_times) < opts.extra_count and attempts < 1000:
+    while not opts.team_silent and len(extra_times) < opts.extra_count and attempts < 1000:
         attempts += 1
         t = rng.uniform(span_start, span_end)
         if all(abs(t - h) > 0.15 for h in hit_times + extra_times):
@@ -201,6 +284,8 @@ def render(pattern: dict, opts: SynthOptions | None = None) -> SynthResult:
         hit_times=sorted(hit_times),
         missed_indices=missed,
         extra_times=sorted(extra_times),
+        bed_start_s=bed_start,
+        bed_times=bed_times,
     )
 
 

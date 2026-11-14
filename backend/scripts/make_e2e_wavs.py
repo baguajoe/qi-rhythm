@@ -6,6 +6,9 @@ the microphone, so hits are placed relative to the moment the app opens the mic:
 - turn takes: the app opens the mic, marks the round 'recording', then starts the count-in about
   ``--turn-lead`` seconds later; hits follow at the seeded rhythm's beat times.
 - calibration: hits line up with the 8 tap-test clicks (80 bpm) ``--cal-lead`` seconds in.
+- backing music: two loops to upload on the Backing music page (full + groove only), the groove
+  alone as the room mic hears it during "Measure music level" (``--music-lead`` s in), and a
+  team take with the groove playing under it (groove starts with the count-in).
 """
 
 import argparse
@@ -17,7 +20,15 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.audio.synth import SynthOptions, render, write_wav  # noqa: E402
+from app.audio.synth import (  # noqa: E402
+    DEFAULT_BED,
+    SynthOptions,
+    _mix,
+    _render_bed,
+    render,
+    voice_sample,
+    write_wav,
+)
 from app.seed.library import GENRES  # noqa: E402
 
 RHYTHM_SLUG = "latin-son-clave-32"
@@ -32,11 +43,56 @@ def find_rhythm(slug: str) -> dict:
     raise SystemExit(f"rhythm {slug} not found")
 
 
+BED_LEVEL, PAD_LEVEL = 0.3, 0.02  # groove as heard by the room mic (quieter than the team)
+
+
+def loop_file(path: Path, bpm: float, bars: int, pattern: dict | None = None) -> None:
+    """A stereo 24-bit 48 kHz loop exactly ``bars`` x 4 beats long, like a Cubase export."""
+    spb = 60.0 / bpm
+    buf = np.zeros(int(round(bars * 4 * spb * SR)))
+    rng = np.random.default_rng(5)
+    _render_bed(buf, 0.0, spb, SynthOptions(sr=SR, bpm=bpm, bed=DEFAULT_BED, bed_level=0.5), rng)
+    for ev in (pattern or {}).get("events", []):
+        _mix(buf, voice_sample(ev["voice"], SR, rng), ev["beat"] * spb, SR, 0.6)
+    import soundfile as sf
+
+    sf.write(str(path), np.stack([np.clip(buf, -1, 1)] * 2, axis=1), SR, subtype="PCM_24")
+
+
+def write_music(out: Path, pattern: dict, bpm: float, args) -> None:
+    loop_file(out / "groove-full.wav", bpm, 2, pattern)
+    loop_file(out / "groove-bed.wav", bpm, 1)
+    room = dict(bpm=bpm, sr=SR, noise_level=0.002, bed=DEFAULT_BED, bed_level=BED_LEVEL)
+    render(
+        pattern,
+        SynthOptions(
+            lead_in_s=args.music_lead,
+            team_silent=True,
+            bed_pad_level=PAD_LEVEL,
+            tail_beats=8,
+            seed=6,
+            **room,
+        ),
+    ).write(out / "music-measure.wav")
+    render(
+        pattern,
+        SynthOptions(
+            lead_in_s=args.turn_lead,
+            jitter_ms=4,
+            bed_pad_level=PAD_LEVEL,
+            tail_beats=6,
+            seed=7,
+            **room,
+        ),
+    ).write(out / "music-turn.wav")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--turn-lead", type=float, default=0.30)
     ap.add_argument("--cal-lead", type=float, default=0.27)
+    ap.add_argument("--music-lead", type=float, default=0.20)
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -64,6 +120,8 @@ def main() -> None:
         ),
     ).write(out / "calibration.wav")
 
+    write_music(out, pattern, bpm, args)
+
     meta = {
         "rhythm_slug": RHYTHM_SLUG,
         "title": rhythm["title"],
@@ -72,6 +130,7 @@ def main() -> None:
         "missed": 2,
         "turn_lead": args.turn_lead,
         "cal_lead": args.cal_lead,
+        "music_lead": args.music_lead,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     print(f"wrote e2e WAVs to {out}")

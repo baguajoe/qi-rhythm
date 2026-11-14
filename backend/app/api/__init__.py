@@ -5,6 +5,7 @@ from werkzeug.exceptions import HTTPException
 def register_blueprints(app: Flask) -> None:
     from .activities import bp as activities_bp
     from .auth import bp as auth_bp
+    from .backing import bp as backing_bp
     from .calibration import bp as calibration_bp
     from .display import bp as display_bp
     from .rhythms import bp as rhythms_bp
@@ -18,6 +19,18 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(sessions_bp, url_prefix="/api")
     app.register_blueprint(display_bp, url_prefix="/api")
     app.register_blueprint(activities_bp, url_prefix="/api/activities")
+    app.register_blueprint(backing_bp, url_prefix="/api")
+
+    @app.errorhandler(413)
+    def _too_large(err):
+        mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
+        return (
+            jsonify(
+                error=f"That file is too big (the limit is {mb} MB). Try a shorter loop or a "
+                "16-bit WAV export."
+            ),
+            413,
+        )
 
     @app.errorhandler(HTTPException)
     def _http_error(err: HTTPException):

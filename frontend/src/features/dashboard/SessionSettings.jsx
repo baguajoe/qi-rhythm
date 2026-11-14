@@ -37,13 +37,30 @@ export default function SessionSettings({ settings, onChange, baseBpm }) {
           }
         />
         <Slider
-          label="Volume"
+          label="Pattern volume"
           value={Math.round(settings.volume * 100)}
           min={0}
           max={100}
           step={5}
           onChange={(v) => onChange({ volume: v / 100 })}
           format={(v) => `${v}%`}
+        />
+        <Slider
+          label="Music volume"
+          value={Math.round((settings.music_volume ?? 0.6) * 100)}
+          min={0}
+          max={100}
+          step={5}
+          onChange={(v) => onChange({ music_volume: v / 100 })}
+          format={(v) => `${v}%`}
+        />
+      </div>
+      <div className={styles.toggles}>
+        <Toggle
+          label="Backing music"
+          hint="Play your uploaded loops for rhythms that have them. Turn off for the built-in drums only."
+          checked={settings.music_on ?? true}
+          onChange={(v) => onChange({ music_on: v })}
         />
       </div>
       <fieldset className={styles.presets}>

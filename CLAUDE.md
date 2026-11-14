@@ -66,6 +66,15 @@ npm run build
   completion; timing/tempo/completion × evidence factor min(1, matched/⌈expected/2⌉).
   needs_review when confidence < 0.5, no hits, or detected/expected outside 0.5–2.0.
   `mode` param selects weights (MODE_WEIGHTS) so Phase 2 modes reuse the engine.
+- `bleed.py` (backing music): "Measure music level" records the groove-only loop alone through the
+  room speaker → `measure_bleed` folds its onsets onto the loop (beats, latency removed) and stores
+  per-transient band levels (5 bands, 75 ms from 10 ms before the onset) + the music's level
+  between hits (30th pct RMS). During a turn `bleed_params` predicts every bed transient
+  (tempo/volume-scaled) and raises the noise gate; `detect_onsets` first measures the residual
+  offset from the bed's own repeating drums (`estimate_bleed_shift`, ±120 ms — absorbs tap-test
+  reaction-time error), then drops an onset within ±40 ms of a bed transient unless some band is
+  ≥ 5 dB louder than the music alone (a team hit on the same beat). Known weak case: a shaker over
+  LOUD hi-hats (same timbre, same beat) — keep the music below the instruments.
 - Call `scoring.warmup()` at worker start (numba JIT); warm analysis of 15 s clip ≈ 0.1 s.
 - Design choice: a team playing the right pattern uniformly fast/slow is matched via the tempo
   fit and penalised only in tempo_consistency (e.g. 10% fast → tempo ≈ 70, total ≈ 95).
@@ -79,6 +88,24 @@ analyses via the round's GameMode, saves Score, recomputes Team.total_points, br
 `round:scored` + `scoreboard:updated`. Overrides keep the machine score (`Score.override_values`).
 Retention: run `flask --app wsgi purge-recordings` daily (cron); `--all` deletes everything.
 No speech is spoken while recording (it would be heard as hits).
+
+## Backing tracks
+- Admins upload WAV loops (44.1/48 kHz, validated with soundfile) per rhythm on `/music`:
+  version `full` (pattern audible) or `bed` (groove only), BPM, bars, notes, `source`
+  (original/commissioned/licensed) + `license_notes`. One track per (org, rhythm, version);
+  re-upload replaces the file and clears its music-level measurements. The response warns when
+  detected duration ≠ bars × beats_per_bar × 60/BPM (±max(50 ms, 1%)), when the loop BPM is far
+  from the rhythm's, or when the loop length doesn't divide the pattern.
+- A track is **usable only with both source and license_notes**; unusable tracks are never sent
+  to a class (`RhythmRecall.reference()["music"]`) and only admins can stream them.
+- Playback (`frontend/src/audio/music.js`): listen = `full` (synth pattern muted, visuals kept),
+  or `bed` + synth pattern if there is no full; turn = `bed` from the first count-in click through
+  the slack bar. Tracks start at schedule time 0 on the shared AudioContext clock; other tempos
+  use Tone.GrainPlayer (pitch kept). No usable track / music off / load failure → synth sounds.
+- Upload of a turn adds `backing_track_id`, `music_start_s`, `music_volume`; analysis applies the
+  latest `MusicBleedProfile` for that track. Played but never measured → `needs_review` with a
+  prompt to press "Measure music level". Measurement audio is analysed in memory, never stored.
+- Session settings: `volume` (pattern + clicks), `music_volume`, `music_on`.
 
 ## Display View & sockets
 - Dashboard "Get a TV code" → `POST /api/sessions/<id>/display-code` (6 chars, 15 min) →
@@ -105,11 +132,14 @@ No speech is spoken while recording (it would be heard as hits).
   wizard's noise step (which hears the same file) still measures a quiet room.
 - Specs run in file order with 1 worker and share state via `e2e/.state.json`:
   01 register/login/room setup/teams → 02 perfect take + live TV + axe → 03 two missed hits →
-  04 silence review prompt + override + TV drop/resync → 05 repeated reconnect stress (own org).
+  04 silence review prompt + override + TV drop/resync → 05 repeated reconnect stress (own org) →
+  06 upload full + groove loops on /music, add licenses, Measure music level (mic = groove alone,
+  `music-measure.wav`) → 07 team turn over the groove (`music-turn.wav`): >= 95, no extras.
 - Score thresholds are NOT widened: perfect take must be >= 95 (observed 100 on every run; browser
   timing offsets were 40–90 ms and are absorbed by offset correction). If a slow CI runner ever
   makes this flaky, set `E2E_PERFECT_MIN` (test-only) rather than changing the engine.
-- `E2E_TURN_LEAD` / `E2E_CAL_LEAD` tweak WAV timing if a Chromium update changes mic-open timing.
+- `E2E_TURN_LEAD` / `E2E_CAL_LEAD` (and `--music-lead` in make_e2e_wavs.py) tweak WAV timing if a
+  Chromium update changes mic-open timing.
 - CI: `.github/workflows/ci.yml` (Postgres service container, uploads `playwright-report` always and
   `test-results` screenshots/videos/traces on failure).
 
@@ -160,3 +190,7 @@ Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions
   now installed: `npx lighthouse … --chrome-flags=--headless` with CHROME_PATH pointing at it).
 - Field-test scoring with real hand drums/shakers in a real room; synthetic tests can't capture
   every room (reverb, crowd noise, Bluetooth speaker latency).
+- Field-test backing-music bleed with real Cubase loops through the room speaker at typical class
+  volumes (bleed constants in onset.py — band window, 5 dB margin — were tuned on synthetic drums
+  only and the optimum was sharp, so treat them as provisional). Check shakers over hi-hat-heavy
+  grooves especially.

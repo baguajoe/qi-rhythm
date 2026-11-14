@@ -14,7 +14,9 @@ ROUND_STATUSES = (
 
 DEFAULT_SESSION_SETTINGS = {
     "tolerance_preset": "gentle",
-    "volume": 0.8,
+    "volume": 0.8,  # the pattern (synthesized drums) and count-in clicks
+    "music_volume": 0.6,  # backing tracks
+    "music_on": True,
     "tempo_multiplier": 1.0,
     "high_contrast": False,
     "spoken_instructions": False,
@@ -81,12 +83,17 @@ class Round(db.Model):
     recording_deleted_at = db.Column(db.DateTime(timezone=True))
     countin_start_s = db.Column(db.Float)  # recording start -> count-in downbeat (s)
     latency_ms_used = db.Column(db.Float)
+    # Backing "bed" track that played under the team's turn (null = no music).
+    backing_track_id = db.Column(db.ForeignKey("backing_tracks.id", ondelete="SET NULL"))
+    music_start_s = db.Column(db.Float)  # recording start -> bed beat 0 (s)
+    music_volume_used = db.Column(db.Float)
     error_message = db.Column(db.String(255))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     session = db.relationship("ClassSession", back_populates="rounds")
     rhythm = db.relationship("Rhythm")
     team = db.relationship("Team")
+    backing_track = db.relationship("BackingTrack")
     score = db.relationship("Score", back_populates="round", uselist=False)
 
     def to_dict(self, include_score: bool = True):
@@ -100,6 +107,8 @@ class Round(db.Model):
             "tolerance_preset": self.tolerance_preset,
             "status": self.status,
             "has_recording": bool(self.recording_key and not self.recording_deleted_at),
+            "backing_track_id": self.backing_track_id,
+            "music_volume_used": self.music_volume_used,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

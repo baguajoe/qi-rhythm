@@ -11,6 +11,7 @@ import { DisplayScreen } from '../features/display/DisplayPage.jsx';
 import { initialDisplayState } from '../features/display/displayReducer.js';
 import ScorePanel from '../features/game/ScorePanel.jsx';
 import LibraryPage from '../features/library/LibraryPage.jsx';
+import MusicPage from '../features/music/MusicPage.jsx';
 import TeamsPage from '../features/teams/TeamsPage.jsx';
 import { axeViolations } from './axe.js';
 import { ME, mockFetch } from './utils.jsx';
@@ -99,8 +100,49 @@ const score = {
   alignment,
 };
 
+const track = (over) => ({
+  id: 20,
+  rhythm_id: 3,
+  version: 'full',
+  bpm: 90,
+  bars: 2,
+  beats_per_bar: 4,
+  loop_beats: 8,
+  loop_seconds: 5.333,
+  notes: 'Cubase export',
+  original_filename: 'clave-full.wav',
+  sample_rate: 48000,
+  channels: 2,
+  duration_s: 5.333,
+  expected_duration_s: 5.333,
+  source: 'original',
+  license_notes: 'Recorded by me, 2026.',
+  usable: true,
+  warnings: [],
+  music_level: null,
+  audio_path: '/api/backing-tracks/20/audio',
+  rev: '2026-11-14T00:00:00Z',
+  ...over,
+});
+const tracks = [
+  track(),
+  track({
+    id: 21,
+    version: 'bed',
+    duration_s: 6.1,
+    source: null,
+    license_notes: '',
+    usable: false,
+    warnings: [
+      'The file is 6.10 s long, but 2 bars at 90 BPM should be 5.33 s.',
+      'Add the source and license notes before this track can be used in a class.',
+    ],
+  }),
+];
+
 const ROUTES = {
   'GET /api/auth/me': ME,
+  'GET /api/backing-tracks': { tracks },
   'GET /api/teams': { teams: [team, team2] },
   'GET /api/genres': { genres },
   'GET /api/rhythms': { rhythms: [rhythm] },
@@ -185,9 +227,17 @@ test('class page before and during a session', async () => {
   const view = renderInLayout(<ClassPage />);
   await screen.findByRole('heading', { name: 'Sunflowers: 81 points' });
   await userEvent.click(screen.getByRole('button', { name: /Son Clave 3-2/ }));
+  await screen.findByText(/Full version while listening/); // backing music panel
   expect(await axeViolations(view.container)).toEqual([]);
   await userEvent.click(screen.getByRole('button', { name: 'Adjust score' }));
   expect(await axeViolations(view.container)).toEqual([]);
+});
+
+test('backing music page with tracks, warnings and the upload form', async () => {
+  const { container } = renderInLayout(<MusicPage />, '/music');
+  await userEvent.selectOptions(await screen.findByLabelText('Rhythm'), '3');
+  await screen.findByRole('heading', { name: /Groove only/ });
+  expect(await axeViolations(container)).toEqual([]);
 });
 
 test('score panel', async () => {

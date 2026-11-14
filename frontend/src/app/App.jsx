@@ -7,6 +7,7 @@ import RequireAuth from '../features/auth/RequireAuth.jsx';
 import ClassPage from '../features/dashboard/ClassPage.jsx';
 import CalibrationPage from '../features/calibration/CalibrationPage.jsx';
 import LibraryPage from '../features/library/LibraryPage.jsx';
+import MusicPage from '../features/music/MusicPage.jsx';
 import TeamsPage from '../features/teams/TeamsPage.jsx';
 import { SettingsProvider } from './settings.jsx';
 
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="teams" element={<TeamsPage />} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="calibration" element={<CalibrationPage />} />
+            <Route path="music" element={<MusicPage />} />
           </Route>
         </Routes>
       </AuthProvider>

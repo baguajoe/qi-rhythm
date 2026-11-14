@@ -2,6 +2,7 @@ import { useDocumentTitle } from '../../app/useDocumentTitle.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { effectiveBpm } from '../../audio/schedule.js';
 import { speak } from '../../audio/speech.js';
+import { loadTrack, setMusicVolume } from '../../audio/music.js';
 import { stopPlayback } from '../../audio/player.js';
 import { usePatternPlayer } from '../../audio/usePatternPlayer.js';
 import BeatVisualizer from '../../components/BeatVisualizer.jsx';
@@ -11,11 +12,12 @@ import Notice from '../../components/Notice.jsx';
 import { api } from '../../lib/api.js';
 import { messageFor } from '../../lib/encouragement.js';
 import ScorePanel from '../game/ScorePanel.jsx';
-import { runTurn } from '../game/turnRunner.js';
+import { measureMusicLevel, prepareMusic, runTurn } from '../game/turnRunner.js';
 import RhythmPicker from '../library/RhythmPicker.jsx';
 import { useLibrary } from '../library/useLibrary.js';
 import TeamBadge from '../teams/TeamBadge.jsx';
 import ActivityBar from './ActivityBar.jsx';
+import MusicPanel, { musicFromTracks } from './MusicPanel.jsx';
 import Scoreboard from './Scoreboard.jsx';
 import ShowOnTv from './ShowOnTv.jsx';
 import SessionSettings from './SessionSettings.jsx';
@@ -34,8 +36,12 @@ const PHASE_TEXT = {
   waiting:
     'Waiting for the internet connection. The recording is saved and will be sent automatically.',
   scored: 'Here is the score.',
+  measuring: 'Measuring the music level… please stay quiet.',
   error: 'Something went wrong.',
 };
+
+const MUSIC_LOAD_ERROR =
+  "The backing music couldn't be loaded, so the built-in drum sounds will play instead.";
 
 export default function ClassPage() {
   useDocumentTitle('Class');
@@ -51,6 +57,7 @@ export default function ClassPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [tracks, setTracks] = useState([]);
   const abortRef = useRef(null);
   const roundRef = useRef(null);
   const preview = usePatternPlayer();
@@ -66,16 +73,44 @@ export default function ClassPage() {
       .catch((e) => setError(e.message));
   }, []);
 
+  // Backing tracks for the chosen rhythm (only ones with source + license notes are played).
+  const rhythmId = rhythm?.id;
+  useEffect(() => {
+    setTracks([]);
+    if (!rhythmId) return undefined;
+    let live = true;
+    api(`/api/backing-tracks?rhythm_id=${rhythmId}`)
+      .then((d) => live && setTracks(d.tracks || []))
+      .catch(() => live && setTracks([]));
+    return () => {
+      live = false;
+    };
+  }, [rhythmId]);
+  const music = useMemo(() => musicFromTracks(tracks), [tracks]);
+  useEffect(() => {
+    // Warm the cache so the first turn doesn't wait on a download.
+    for (const t of [music?.full, music?.bed]) if (t) loadTrack(t).catch(() => {});
+  }, [music]);
+
   const settings = cls.data?.session.settings;
+  const musicOn = settings?.music_on ?? true;
+  const musicVolume = settings?.music_volume ?? 0.6;
+  useEffect(() => {
+    setMusicVolume(musicVolume);
+  }, [musicVolume]);
   const team = teams.find((t) => t.id === teamId);
   const bpm = rhythm && settings ? effectiveBpm(rhythm.bpm, settings.tempo_multiplier * 100) : null;
   const busy = !['idle', 'scored', 'error'].includes(phase) || preview.playing;
   const say = (text) =>
     speak(text, { enabled: settings?.spoken_instructions, rate: settings?.speech_rate });
 
-  // Restore the most recent turn's score when returning to the page.
+  // Restore the most recent turn's score when returning to the page (once: starting a new turn
+  // clears the result, and the previous team's score must not pop back during it).
+  const restored = useRef(false);
   useEffect(() => {
-    if (!cls.data || result) return;
+    if (!cls.data || restored.current) return;
+    restored.current = true;
+    if (result) return;
     const last = [...cls.data.rounds].reverse().find((r) => r.score);
     if (last) setResult({ round: last, score: last.score });
   }, [cls.data, result]);
@@ -113,9 +148,16 @@ export default function ClassPage() {
       bpm,
       length_beats: rhythm.length_beats,
     });
+    const listen = await prepareMusic(music, 'listen', {
+      musicOn,
+      volume: musicVolume,
+      onError: () => setNotice(MUSIC_LOAD_ERROR),
+    });
     await preview.play(rhythm.pattern, bpm, {
       lengthBeats: rhythm.length_beats,
       volume: settings.volume,
+      muteHits: listen?.muteHits,
+      music: listen,
       onItem: (item) => item.kind === 'hit' && send('control:beat', { index: item.index }),
     });
     send('control:idle');
@@ -137,9 +179,12 @@ export default function ClassPage() {
       say(`${team.name}, listen to the pattern.`);
       const res = await runTurn(round, {
         volume: settings.volume,
+        musicVolume,
+        musicOn,
         signal: controller.signal,
         emit: (stage, data) => {
-          if (stage === 'reference') setPhase('reference');
+          if (stage === 'music-error') setNotice(MUSIC_LOAD_ERROR);
+          else if (stage === 'reference') setPhase('reference');
           else if (stage === 'hit') {
             setPlayedThrough(data.index);
             send('control:beat', { index: data.index });
@@ -180,6 +225,39 @@ export default function ClassPage() {
       abortRef.current = null;
       roundRef.current = null;
       setCount(null);
+      setLevel(0);
+    }
+  }
+
+  async function measureMusic() {
+    setError('');
+    setNotice('');
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setPhase('measuring');
+    try {
+      const res = await measureMusicLevel({
+        bed: music.bed,
+        bpm,
+        volume: musicVolume,
+        sessionId: cls.sessionId,
+        signal: controller.signal,
+        onLevel: setLevel,
+      });
+      setTracks((ts) =>
+        ts.map((t) => (t.id === music.bed.id ? { ...t, music_level: res.music_level } : t)),
+      );
+      if (res.tone === 'success') setNotice(res.message);
+      else setError(res.message);
+      setPhase('idle');
+    } catch (e) {
+      if (e.name === 'AbortError') setPhase('idle');
+      else {
+        setPhase('error');
+        setError(e.message);
+      }
+    } finally {
+      abortRef.current = null;
       setLevel(0);
     }
   }
@@ -302,7 +380,7 @@ export default function ClassPage() {
             <p className={styles.phase} aria-live="polite">
               {count ? <span className={styles.count}>{count}</span> : PHASE_TEXT[phase]}
             </p>
-            {phase === 'recording' && (
+            {(phase === 'recording' || phase === 'measuring') && (
               <LevelMeter level={level} label="Sound level in the room" size="large" />
             )}
             <div className={styles.controls}>
@@ -326,6 +404,14 @@ export default function ClassPage() {
             </div>
           </section>
 
+          <MusicPanel
+            rhythm={rhythm}
+            music={music}
+            musicOn={musicOn}
+            busy={busy}
+            measuring={phase === 'measuring'}
+            onMeasure={measureMusic}
+          />
           {result && (
             <ScorePanel
               round={result.round}

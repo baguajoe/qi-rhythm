@@ -139,8 +139,22 @@ def upload_recording(me: Instructor, round_id: int):
         abort(400, "Recording timing information is missing.")
     if not -1.0 <= countin_start_s <= MAX_UPLOAD_SECONDS_SLACK:
         abort(400, "Recording timing information doesn't look right.")
+    music = None
+    if request.form.get("backing_track_id"):
+        try:
+            music = {
+                "backing_track_id": int(request.form["backing_track_id"]),
+                "music_start_s": float(request.form.get("music_start_s", "")),
+                "music_volume": float(request.form.get("music_volume", "")),
+            }
+        except ValueError:
+            abort(400, "Music timing information is missing.")
+        if not -1.0 <= music["music_start_s"] <= MAX_UPLOAD_SECONDS_SLACK:
+            abort(400, "Music timing information doesn't look right.")
+        if not 0.0 < music["music_volume"] <= 1.0:
+            abort(400, "The music volume doesn't look right.")
     try:
-        score = game.process_recording(rnd, audio, countin_start_s)
+        score = game.process_recording(rnd, audio, countin_start_s, music)
     except HTTPException:
         raise
     except Exception:  # noqa: BLE001 - unreadable audio etc.; round is marked failed

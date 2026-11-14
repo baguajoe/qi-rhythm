@@ -54,7 +54,7 @@ def validate_settings(patch: dict) -> dict:
                 abort(400, f"{key} must be a number.")
             if key == "tempo_multiplier" and not 0.5 <= value <= 1.2:
                 abort(400, "Speed must be between 50% and 120%.")
-            if key == "volume" and not 0 <= value <= 1:
+            if key in ("volume", "music_volume") and not 0 <= value <= 1:
                 abort(400, "Volume must be between 0 and 1.")
             if key == "speech_rate" and not 0.5 <= value <= 1.5:
                 abort(400, "Speech rate must be between 0.5 and 1.5.")
@@ -125,11 +125,30 @@ def recompute_team_points(team: Team) -> None:
     team.total_points = round(sum(s.effective_total for s in scores), 1)
 
 
-def process_recording(rnd: Round, audio: bytes, countin_start_s: float) -> Score:
+def process_recording(
+    rnd: Round, audio: bytes, countin_start_s: float, music: dict | None = None
+) -> Score:
+    """``music`` = {backing_track_id, music_start_s, music_volume} when a bed track played."""
     if rnd.status in ("scored", "overridden"):
         abort(409, "This turn already has a score. Start a new turn to play again.")
     if rnd.session.ended_at is not None:
         abort(409, "This class has ended.")
+    track = None
+    if music:
+        from ..models import BackingTrack
+
+        track = db.session.get(BackingTrack, int(music["backing_track_id"]))
+        if (
+            track is None
+            or track.organization_id != rnd.session.organization_id
+            or track.rhythm_id != rnd.rhythm_id
+            or track.version != "bed"
+            or not track.usable
+        ):
+            abort(400, "That backing track can't be used for this turn.")
+    rnd.backing_track = track
+    rnd.music_start_s = music["music_start_s"] if track else None
+    rnd.music_volume_used = music["music_volume"] if track else None
     rnd.status = "analyzing"
     rnd.countin_start_s = countin_start_s
     db.session.commit()
