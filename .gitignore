@@ -12,3 +12,11 @@ frontend/dist/
 frontend/dev-dist/
 *.log
 .DS_Store
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/dist-e2e/
+frontend/e2e/.wavs/
+frontend/e2e/.state.json

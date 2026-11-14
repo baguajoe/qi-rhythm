@@ -39,6 +39,10 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 SOCKETIO_ASYNC_MODE=gevent PORT=8001 .venv/bin/gunicorn -c gunicorn.conf.py wsgi:app
 .venv/bin/flask --app wsgi purge-recordings [--all]   # retention purge (daily cron in prod)
 
+# Everything (from repo root): starts Postgres, runs pytest + Vitest + Playwright, stops Postgres
+make test-all            # or: cd frontend && npm run test:all
+make lint
+
 # Frontend (from frontend/)
 npm install
 npm run dev        # :5173
@@ -88,6 +92,27 @@ No speech is spoken while recording (it would be heard as hits).
   `session:settings|ended`.
 - Live state is in process memory: run ONE gevent worker (see Procfile).
 
+## End-to-end tests (frontend/e2e, Playwright, Chromium only)
+- `npx playwright test` (Postgres must be running) starts its own servers: backend = gunicorn+gevent
+  on :5001 against a throwaway `qi_rhythm_e2e` DB (reset + migrated + seeded on every run by
+  `backend/scripts/e2e_prepare_db.py`, which refuses DB names without "e2e"); frontend = production
+  build served by `vite preview` on :5174.
+- The "microphone" is a WAV: Chromium flags `--use-fake-device-for-media-stream
+  --use-file-for-fake-audio-capture=<wav>%noloop`. Chromium restarts the file at 0 every time the
+  page opens the mic (verified), so `backend/scripts/make_e2e_wavs.py` (uses synth.py + the seeded
+  Son Clave 3-2 at 90 bpm) places hits relative to mic-open: count-in ≈ 0.30 s in for team turns,
+  tap-test clicks ≈ 0.27 s in for calibration. Calibration taps use the short shaker voice so the
+  wizard's noise step (which hears the same file) still measures a quiet room.
+- Specs run in file order with 1 worker and share state via `e2e/.state.json`:
+  01 register/login/room setup/teams → 02 perfect take + live TV + axe → 03 two missed hits →
+  04 silence review prompt + override + TV drop/resync → 05 repeated reconnect stress (own org).
+- Score thresholds are NOT widened: perfect take must be >= 95 (observed 100 on every run; browser
+  timing offsets were 40–90 ms and are absorbed by offset correction). If a slow CI runner ever
+  makes this flaky, set `E2E_PERFECT_MIN` (test-only) rather than changing the engine.
+- `E2E_TURN_LEAD` / `E2E_CAL_LEAD` tweak WAV timing if a Chromium update changes mic-open timing.
+- CI: `.github/workflows/ci.yml` (Postgres service container, uploads `playwright-report` always and
+  `test-results` screenshots/videos/traces on failure).
+
 ## Conventions
 - Conventional commits (`feat:`, `fix:`, `test:`, `chore:`); commit + push after each slice.
 - Stubs are marked `# TODO(phase-N):` (or `// TODO(phase-N):`) and listed below.
@@ -131,6 +156,7 @@ Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions
 
 ## Review flags before launch
 - Genre `cultural_notes` (backend/app/seed/library.py) must be reviewed by a knowledgeable musician.
-- Run Lighthouse accessibility (needs Chrome) on /login, / and /display/:id; target >= 95.
+- Run Lighthouse accessibility on /login, / and /display/:id; target >= 95 (Playwright's Chromium is
+  now installed: `npx lighthouse … --chrome-flags=--headless` with CHROME_PATH pointing at it).
 - Field-test scoring with real hand drums/shakers in a real room; synthetic tests can't capture
   every room (reverb, crowd noise, Bluetooth speaker latency).

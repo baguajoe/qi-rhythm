@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from app.extensions import socketio
 from app.models import DisplayPairing
 from app.models.base import utcnow
@@ -112,3 +114,74 @@ def test_end_session_shows_ended(app, client):
     client.post(f"/api/sessions/{sess['id']}/end", headers=h)
     assert events_named(display, "session:ended")
     assert client.post(f"/api/sessions/{sess['id']}/display-code", headers=h).status_code == 409
+
+
+# ---------------------------------------------------------------- control-event authorization
+
+from app.sockets.handlers import CONTROL_EVENTS  # noqa: E402
+
+
+def _joined_clients(app, client):
+    h, sess, *_ = setup_class(client)
+    clear_live(sess["id"])
+    inst = socketio.test_client(app, auth={"token": h["Authorization"].split()[1]})
+    tv1 = socketio.test_client(app, auth={"token": pair_display(client, h, sess["id"])})
+    tv2 = socketio.test_client(app, auth={"token": pair_display(client, h, sess["id"])})
+    for c in (inst, tv1, tv2):
+        assert c.emit("join_session", {"session_id": sess["id"]}, callback=True) == {"ok": True}
+        c.get_received()
+    return h, sess, inst, tv1, tv2
+
+
+@pytest.mark.parametrize("event", sorted(CONTROL_EVENTS))
+def test_only_the_instructor_can_send_control_events(app, client, event):
+    _, _, inst, tv1, tv2 = _joined_clients(app, client)
+    payload = {"count": 2, "index": 1, "rms": 0.2, "title": "x"}
+
+    # Instructor: accepted and relayed to every display under the public event name.
+    assert inst.emit(event, payload, callback=True) == {"ok": True}
+    for tv in (tv1, tv2):
+        got = [e for e in tv.get_received() if e["name"] == CONTROL_EVENTS[event]]
+        assert got and got[0]["args"][0] == payload
+
+    # Display: refused, and nothing reaches the other display or the instructor.
+    ack = tv1.emit(event, payload, callback=True)
+    assert ack["ok"] is False and "instructor" in ack["error"]
+    assert tv2.get_received() == []
+    assert inst.get_received() == []
+
+
+def test_instructor_must_join_before_controlling(app, client):
+    h, sess, *_ = setup_class(client)
+    inst = socketio.test_client(app, auth={"token": h["Authorization"].split()[1]})
+    assert inst.emit("control:countin", {"count": 1}, callback=True)["ok"] is False
+
+
+def test_instructor_from_another_org_cannot_join(app, client):
+    _, sess, *_ = setup_class(client)
+    from .helpers import auth_headers
+
+    other = auth_headers(client, email="else@example.com", org="Elsewhere")
+    sio = socketio.test_client(app, auth={"token": other["Authorization"].split()[1]})
+    assert sio.emit("join_session", {"session_id": sess["id"]}, callback=True)["ok"] is False
+    assert sio.emit("join_session", {"session_id": "nope"}, callback=True)["ok"] is False
+
+
+def test_expired_display_token_cannot_connect(app, client):
+    from flask_jwt_extended import create_access_token
+
+    _, sess, *_ = setup_class(client)
+    with app.test_request_context():
+        token = create_access_token(
+            identity=f"display:{sess['id']}",
+            additional_claims={"kind": "display", "session_id": sess["id"]},
+            expires_delta=timedelta(seconds=-5),
+        )
+    assert not socketio.test_client(app, auth={"token": token}).is_connected()
+
+
+def test_oversized_control_payload_is_refused(app, client):
+    _, _, inst, tv1, _ = _joined_clients(app, client)
+    big = {f"k{i}": i for i in range(30)}
+    assert inst.emit("control:focus", big, callback=True)["ok"] is False
+    assert tv1.get_received() == []

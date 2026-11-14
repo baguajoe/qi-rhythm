@@ -6,7 +6,7 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 import prettier from 'eslint-config-prettier';
 
 export default [
-  { ignores: ['dist', 'dev-dist', 'node_modules'] },
+  { ignores: ['dist', 'dev-dist', 'dist-e2e', 'node_modules', 'playwright-report', 'test-results'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx}'],

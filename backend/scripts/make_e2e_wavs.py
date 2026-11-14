@@ -1,0 +1,81 @@
+"""Generate the WAV files the Playwright suite feeds into Chromium's fake microphone.
+
+Chromium (--use-file-for-fake-audio-capture) restarts the file from 0 each time the page opens
+the microphone, so hits are placed relative to the moment the app opens the mic:
+
+- turn takes: the app opens the mic, marks the round 'recording', then starts the count-in about
+  ``--turn-lead`` seconds later; hits follow at the seeded rhythm's beat times.
+- calibration: hits line up with the 8 tap-test clicks (80 bpm) ``--cal-lead`` seconds in.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.audio.synth import SynthOptions, render, write_wav  # noqa: E402
+from app.seed.library import GENRES  # noqa: E402
+
+RHYTHM_SLUG = "latin-son-clave-32"
+SR = 48000
+
+
+def find_rhythm(slug: str) -> dict:
+    for g in GENRES:
+        for r in g["rhythms"]:
+            if r["slug"] == slug:
+                return r
+    raise SystemExit(f"rhythm {slug} not found")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--turn-lead", type=float, default=0.30)
+    ap.add_argument("--cal-lead", type=float, default=0.27)
+    args = ap.parse_args()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    rhythm = find_rhythm(RHYTHM_SLUG)
+    pattern, bpm = rhythm["pattern"], rhythm["bpm"]
+    common = dict(bpm=bpm, sr=SR, lead_in_s=args.turn_lead, noise_level=0.002, tail_beats=6)
+
+    render(pattern, SynthOptions(jitter_ms=4, seed=1, **common)).write(out / "perfect.wav")
+    render(pattern, SynthOptions(jitter_ms=4, seed=2, miss_indices=[1, 3], **common)).write(
+        out / "missed.wav"
+    )
+    rng = np.random.default_rng(3)
+    write_wav(out / "silence.wav", (rng.standard_normal(SR * 14) * 0.0005).astype(np.float32), SR)
+
+    taps = {
+        "count_in_beats": 0,
+        "length_beats": 8,
+        "events": [{"beat": b, "voice": "shaker"} for b in range(8)],
+    }
+    render(
+        taps,
+        SynthOptions(
+            bpm=80, sr=SR, lead_in_s=args.cal_lead, noise_level=0.002, tail_beats=4, seed=4
+        ),
+    ).write(out / "calibration.wav")
+
+    meta = {
+        "rhythm_slug": RHYTHM_SLUG,
+        "title": rhythm["title"],
+        "bpm": bpm,
+        "hits": len(pattern["events"]),
+        "missed": 2,
+        "turn_lead": args.turn_lead,
+        "cal_lead": args.cal_lead,
+    }
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    print(f"wrote e2e WAVs to {out}")
+
+
+if __name__ == "__main__":
+    main()
