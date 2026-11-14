@@ -104,7 +104,11 @@ No speech is spoken while recording (it would be heard as hits).
 7. [x] Rhythm Recall round, full loop
 8. [x] Display View + Socket.IO + display-token pairing + reconnection (measured: 0.5 s resync after a dropped connection)
 9. [x] Session scoreboard + saved Activities
-10. [ ] Accessibility pass (axe-core)
+10. [x] Accessibility pass: axe-core runs in Vitest over every page and Display phase
+    (`src/test/pages.a11y.test.jsx`); token contrast tests enforce AA (normal) / AAA (high contrast)
+    (`src/test/tokens.a11y.test.js`). Lighthouse needs Chrome (not in this Codespace) — run locally:
+    `npm run build && npx vite preview --port 4173` then
+    `npx lighthouse http://localhost:4173/login --only-categories=accessibility`.
 11. [ ] Deployment configs (Railway, Vercel) — do not deploy
 
 Later phases (extension points only): Phase 2 game modes & brackets; Phase 3–4 testing tooling and

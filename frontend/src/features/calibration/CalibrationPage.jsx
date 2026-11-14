@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '../../app/useDocumentTitle.js';
 import { useEffect, useRef, useState } from 'react';
 import { playPattern } from '../../audio/player.js';
 import { createRecorder, recordFor } from '../../audio/recorder.js';
@@ -25,6 +26,7 @@ const STEP_TITLES = {
 };
 
 export default function CalibrationPage() {
+  useDocumentTitle('Room setup');
   const [step, setStep] = useState('intro');
   const [busy, setBusy] = useState(false);
   const [level, setLevel] = useState(0);

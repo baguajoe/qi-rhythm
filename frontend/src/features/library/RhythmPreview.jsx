@@ -51,7 +51,7 @@ export default function RhythmPreview({ rhythm, genre }) {
           max={120}
           step={5}
           onChange={setTempo}
-          format={(v) => `${v}% (${Math.round(effectiveBpm(rhythm.bpm, v))} bpm)`}
+          format={(v) => `${v}% (${Math.round(effectiveBpm(rhythm.bpm, v))} beats per minute)`}
         />
         <Slider
           label="Volume"

@@ -32,7 +32,9 @@ export default function SessionSettings({ settings, onChange, baseBpm }) {
           max={120}
           step={5}
           onChange={(v) => onChange({ tempo_multiplier: v / 100 })}
-          format={(v) => (baseBpm ? `${v}% (${Math.round((baseBpm * v) / 100)} bpm)` : `${v}%`)}
+          format={(v) =>
+            baseBpm ? `${v}% (${Math.round((baseBpm * v) / 100)} beats per minute)` : `${v}%`
+          }
         />
         <Slider
           label="Volume"

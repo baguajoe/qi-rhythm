@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '../../app/useDocumentTitle.js';
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Button from '../../components/Button.jsx';
@@ -15,6 +16,7 @@ const ORG_TYPES = [
 ];
 
 export default function LoginPage() {
+  useDocumentTitle('Sign in');
   const { login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

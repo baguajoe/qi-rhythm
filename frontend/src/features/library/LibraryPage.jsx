@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '../../app/useDocumentTitle.js';
 import { useState } from 'react';
 import Notice from '../../components/Notice.jsx';
 import RhythmPicker from './RhythmPicker.jsx';
@@ -6,6 +7,7 @@ import { useLibrary } from './useLibrary.js';
 import styles from './LibraryPage.module.css';
 
 export default function LibraryPage() {
+  useDocumentTitle('Rhythm library');
   const { genres, rhythms, loading, error } = useLibrary();
   const [selected, setSelected] = useState(null);
   return (

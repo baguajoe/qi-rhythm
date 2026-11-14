@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '../../app/useDocumentTitle.js';
 import { useCallback, useEffect, useState } from 'react';
 import Button from '../../components/Button.jsx';
 import Field from '../../components/Field.jsx';
@@ -155,6 +156,7 @@ function TeamEditor({ team, onSaved }) {
 }
 
 export default function TeamsPage() {
+  useDocumentTitle('Teams');
   const [teams, setTeams] = useState([]);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ name: '', color: TEAM_COLORS[0].hex, mascot_icon: null });

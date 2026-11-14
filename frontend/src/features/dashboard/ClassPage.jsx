@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '../../app/useDocumentTitle.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { effectiveBpm } from '../../audio/schedule.js';
 import { speak } from '../../audio/speech.js';
@@ -37,6 +38,7 @@ const PHASE_TEXT = {
 };
 
 export default function ClassPage() {
+  useDocumentTitle('Class');
   const cls = useClassSession();
   const { genres, rhythms } = useLibrary();
   const [teams, setTeams] = useState([]);
@@ -272,7 +274,7 @@ export default function ClassPage() {
             <h2 id="play-title">3. Play</h2>
             {rhythm ? (
               <p className={styles.now}>
-                <strong>{rhythm.title}</strong> · {Math.round(bpm)} bpm{' '}
+                <strong>{rhythm.title}</strong> · {Math.round(bpm)} beats per minute{' '}
                 {team && (
                   <>
                     · <TeamBadge team={team} />
