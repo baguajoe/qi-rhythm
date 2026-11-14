@@ -13,7 +13,7 @@ def create_app(config_name: str | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_by_name[config_name or os.getenv("APP_CONFIG", "default")])
 
-    from . import games, models  # noqa: F401  (register models and game modes)
+    from . import games, models, sockets  # noqa: F401  (models, game modes, socket handlers)
     from .cli import register_cli
 
     db.init_app(app)

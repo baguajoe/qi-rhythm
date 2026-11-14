@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import { AuthProvider } from '../features/auth/AuthContext.jsx';
+import DisplayPage from '../features/display/DisplayPage.jsx';
 import LoginPage from '../features/auth/LoginPage.jsx';
 import RequireAuth from '../features/auth/RequireAuth.jsx';
 import ClassPage from '../features/dashboard/ClassPage.jsx';
@@ -15,6 +16,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/display/:sessionId" element={<DisplayPage />} />
           <Route
             element={
               <RequireAuth>

@@ -28,6 +28,10 @@ const runTurn = vi.fn(async (round, { emit }) => {
   return { round: { ...round, team: { name: 'Sunflowers', color: '#b35900' } }, score: scoreObj };
 });
 vi.mock('../game/turnRunner.js', () => ({ runTurn: (...a) => runTurn(...a) }));
+const sent = [];
+vi.mock('./useSessionSocket.js', () => ({
+  useSessionSocket: () => ({ status: 'connected', send: (e, p) => sent.push([e, p]) }),
+}));
 vi.mock('../../audio/player.js', () => ({
   playPattern: vi.fn(async () => ({})),
   stopPlayback: vi.fn(),
@@ -95,6 +99,10 @@ test('start class, run a turn, see score, confirm', async () => {
   await userEvent.click(start);
 
   expect(await screen.findByRole('heading', { name: 'Sunflowers: 99 points' })).toBeInTheDocument();
+  expect(sent.map(([e]) => e)).toEqual(
+    expect.arrayContaining(['control:focus', 'control:countin', 'control:recording']),
+  );
+  expect(sent.find(([e]) => e === 'control:countin')[1]).toEqual({ count: 4 });
   expect(calls.find((c) => c.key === 'POST /api/sessions/42/rounds').body).toEqual({
     rhythm_id: 3,
     team_id: 1,

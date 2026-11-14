@@ -12,7 +12,8 @@ from ..games import get_mode
 from ..models import ClassSession, Rhythm, Round, Score, Team
 from ..models.base import utcnow
 from ..models.session import CATEGORY_FIELDS, DEFAULT_SESSION_SETTINGS
-from ..sockets.broadcast import broadcast  # noqa: F401  (re-exported for API modules)
+from ..sockets.broadcast import broadcast
+from ..sockets.state import update_live
 from .storage import get_storage
 
 TOLERANCE_PRESETS = ("gentle", "standard", "challenge")
@@ -22,9 +23,11 @@ CONTROL_TRANSITIONS = {
     "recording": {"pending", "playing_reference", "recording", "failed"},
     "pending": {"pending", "playing_reference", "recording", "failed"},  # Stop
 }
+# The server marks a round "recording" just before the count-in starts, so the Display shows
+# "Get ready" (round:countin); the instructor's client sends round:recording after the count-in.
 STATUS_EVENTS = {
     "playing_reference": "round:reference_playing",
-    "recording": "round:recording",
+    "recording": "round:countin",
     "pending": "round:stopped",
 }
 
@@ -109,6 +112,10 @@ def set_status(rnd: Round, status: str) -> Round:
         abort(409, "That step isn't possible right now.")
     rnd.status = status
     db.session.commit()
+    update_live(
+        rnd.session_id,
+        phase={"playing_reference": "reference", "recording": "countin", "pending": "idle"}[status],
+    )
     broadcast(rnd.session_id, STATUS_EVENTS[status], round_payload(rnd))
     return rnd
 
@@ -126,6 +133,7 @@ def process_recording(rnd: Round, audio: bytes, countin_start_s: float) -> Score
     rnd.status = "analyzing"
     rnd.countin_start_s = countin_start_s
     db.session.commit()
+    update_live(rnd.session_id, phase="analyzing", count=None)
     broadcast(rnd.session_id, "round:analyzing", {"round_id": rnd.id, "team_id": rnd.team_id})
 
     key = (
@@ -145,6 +153,7 @@ def process_recording(rnd: Round, audio: bytes, countin_start_s: float) -> Score
         rnd.status = "failed"
         rnd.error_message = "We couldn't read that recording. Please try the turn again."
         db.session.commit()
+        update_live(rnd.session_id, phase="idle")
         broadcast(rnd.session_id, "round:failed", {"round_id": rnd.id})
         raise exc
     fields = mode.score(rnd, analysis)
@@ -155,6 +164,7 @@ def process_recording(rnd: Round, audio: bytes, countin_start_s: float) -> Score
     db.session.flush()
     recompute_team_points(rnd.team)
     db.session.commit()
+    update_live(rnd.session_id, phase="scored")
     broadcast(rnd.session_id, "round:scored", round_payload(rnd))
     broadcast(rnd.session_id, "scoreboard:updated", scoreboard(rnd.session))
     return score

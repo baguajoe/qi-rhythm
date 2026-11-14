@@ -15,9 +15,11 @@ import RhythmPicker from '../library/RhythmPicker.jsx';
 import { useLibrary } from '../library/useLibrary.js';
 import TeamBadge from '../teams/TeamBadge.jsx';
 import Scoreboard from './Scoreboard.jsx';
+import ShowOnTv from './ShowOnTv.jsx';
 import SessionSettings from './SessionSettings.jsx';
 import StartClass from './StartClass.jsx';
 import { useClassSession } from './useClassSession.js';
+import { useSessionSocket } from './useSessionSocket.js';
 import styles from './ClassPage.module.css';
 
 const PHASE_TEXT = {
@@ -47,7 +49,10 @@ export default function ClassPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const abortRef = useRef(null);
+  const roundRef = useRef(null);
   const preview = usePatternPlayer();
+  const live = useSessionSocket(cls.data ? cls.sessionId : null);
+  const { send } = live;
 
   useEffect(() => {
     api('/api/teams')
@@ -73,6 +78,17 @@ export default function ClassPage() {
   }, [cls.data, result]);
 
   const genre = useMemo(() => genres.find((g) => g.slug === rhythm?.genre_slug), [genres, rhythm]);
+
+  // Tell the TV which team is up and which rhythm is chosen.
+  useEffect(() => {
+    if (live.status !== 'connected') return;
+    send('control:focus', {
+      team: team
+        ? { id: team.id, name: team.name, color: team.color, mascot_icon: team.mascot_icon }
+        : null,
+      rhythm: rhythm ? { id: rhythm.id, title: rhythm.title } : null,
+    });
+  }, [send, live.status, team, rhythm]);
 
   if (!cls.sessionId || !cls.data) {
     return (
@@ -106,22 +122,29 @@ export default function ClassPage() {
         method: 'POST',
         body: { rhythm_id: rhythm.id, team_id: team.id },
       });
+      roundRef.current = round;
       say(`${team.name}, listen to the pattern.`);
       const res = await runTurn(round, {
         volume: settings.volume,
         signal: controller.signal,
         emit: (stage, data) => {
           if (stage === 'reference') setPhase('reference');
-          else if (stage === 'hit') setPlayedThrough(data.index);
-          else if (stage === 'countin') {
+          else if (stage === 'hit') {
+            setPlayedThrough(data.index);
+            send('control:beat', { index: data.index });
+          } else if (stage === 'countin') {
             setPhase('countin');
             setPlayedThrough(-1);
             setCount(data.countNumber);
+            send('control:countin', { count: data.countNumber });
           } else if (stage === 'recording') {
             setCount(null);
             setPhase('recording');
-          } else if (stage === 'level') setLevel(data);
-          else if (stage === 'uploading') setPhase('uploading');
+            send('control:recording');
+          } else if (stage === 'level') {
+            setLevel(data);
+            send('control:level', { rms: data });
+          } else if (stage === 'uploading') setPhase('uploading');
           else if (stage === 'waiting') setPhase('waiting');
         },
       });
@@ -132,6 +155,11 @@ export default function ClassPage() {
     } catch (e) {
       if (e.name === 'AbortError') {
         setPhase('idle');
+        if (roundRef.current)
+          api(`/api/rounds/${roundRef.current.id}`, {
+            method: 'PATCH',
+            body: { status: 'pending' },
+          }).catch(() => {});
         setNotice('Stopped. You can start the turn again when ready.');
       } else {
         setPhase('error');
@@ -139,6 +167,7 @@ export default function ClassPage() {
       }
     } finally {
       abortRef.current = null;
+      roundRef.current = null;
       setCount(null);
       setLevel(0);
     }
@@ -148,6 +177,7 @@ export default function ClassPage() {
     abortRef.current?.abort();
     preview.stop();
     stopPlayback();
+    send('control:idle');
     setPhase('idle');
   }
 
@@ -291,6 +321,7 @@ export default function ClassPage() {
         </div>
       </div>
 
+      <ShowOnTv sessionId={cls.sessionId} socketStatus={live.status} />
       <SessionSettings settings={settings} onChange={cls.updateSettings} baseBpm={rhythm?.bpm} />
       {genre?.cultural_notes && (
         <section className={styles.card} aria-labelledby="about-title">

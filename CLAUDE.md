@@ -72,6 +72,18 @@ analyses via the round's GameMode, saves Score, recomputes Team.total_points, br
 Retention: run `flask --app wsgi purge-recordings` daily (cron); `--all` deletes everything.
 No speech is spoken while recording (it would be heard as hits).
 
+## Display View & sockets
+- Dashboard "Get a TV code" → `POST /api/sessions/<id>/display-code` (6 chars, 15 min) →
+  TV opens `/display/<id>?code=…` → `POST /api/display/pair` → display JWT (`kind=display`,
+  12 h, bound to one session; cannot call instructor endpoints).
+- Socket clients connect with `auth.token`, then `join_session`; the server replies with a full
+  `session:state` snapshot (DB + in-memory live phase) on every (re)connect.
+- Only instructor sockets may send `control:*` events (focus, reference, beat, countin, recording,
+  level, idle); the server relays them to the room. REST lifecycle changes broadcast
+  `round:started|reference_playing|countin|analyzing|scored|overridden|stopped`, `scoreboard:updated`,
+  `session:settings|ended`.
+- Live state is in process memory: run ONE gevent worker (see Procfile).
+
 ## Conventions
 - Conventional commits (`feat:`, `fix:`, `test:`, `chore:`); commit + push after each slice.
 - Stubs are marked `# TODO(phase-N):` (or `// TODO(phase-N):`) and listed below.
@@ -90,7 +102,7 @@ No speech is spoken while recording (it would be heard as hits).
 5. [x] Rhythm library + Tone.js player + beat visualizer
 6. [x] Calibration wizard (calibration audio is analysed in memory, never stored)
 7. [x] Rhythm Recall round, full loop
-8. [ ] Display View + Socket.IO + display-token pairing + reconnection
+8. [x] Display View + Socket.IO + display-token pairing + reconnection (measured: 0.5 s resync after a dropped connection)
 9. [ ] Session scoreboard + saved Activities
 10. [ ] Accessibility pass (axe-core)
 11. [ ] Deployment configs (Railway, Vercel) — do not deploy
@@ -100,6 +112,8 @@ event/demo mode (May 2027 Senior Community Wellness Day); Phase 5 remote tournam
 Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions.
 
 ## Open TODOs / stubs
+- `sockets/state.py` — TODO(phase-5): Redis-backed live state + Socket.IO message queue for multi-worker.
+- `ShowOnTv.jsx` — TODO(phase-3): QR code for the pairing link (needs a small QR library; ask first).
 - `frontend/src/lib/uploadQueue.js` — TODO(phase-3): persist pending takes in IndexedDB (currently
   retried in memory with backoff through network blips; lost on page reload).
 - `frontend/src/audio/instruments.js` VOICE_SAMPLE_URLS — TODO(phase-2): swap synthesized kit for original Cubase-recorded one-shots on R2.
