@@ -35,6 +35,10 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/ruff check . && .venv/bin/black --check .   # lint
 .venv/bin/python -m app.audio.cli score --pattern x.json --bpm 90 --wav take.wav  # (slice 2+)
 
+# Production server locally (from backend/)
+SOCKETIO_ASYNC_MODE=gevent PORT=8001 .venv/bin/gunicorn -c gunicorn.conf.py wsgi:app
+.venv/bin/flask --app wsgi purge-recordings [--all]   # retention purge (daily cron in prod)
+
 # Frontend (from frontend/)
 npm install
 npm run dev        # :5173
@@ -109,7 +113,7 @@ No speech is spoken while recording (it would be heard as hits).
     (`src/test/tokens.a11y.test.js`). Lighthouse needs Chrome (not in this Codespace) — run locally:
     `npm run build && npx vite preview --port 4173` then
     `npx lighthouse http://localhost:4173/login --only-categories=accessibility`.
-11. [ ] Deployment configs (Railway, Vercel) — do not deploy
+11. [x] Deployment configs (Railway, Vercel) — see docs/DEPLOYMENT.md. Not deployed.
 
 Later phases (extension points only): Phase 2 game modes & brackets; Phase 3–4 testing tooling and
 event/demo mode (May 2027 Senior Community Wellness Day); Phase 5 remote tournaments, Beat Builder,

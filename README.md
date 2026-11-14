@@ -14,3 +14,7 @@ docker compose up -d db
 cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest -q
 cd ../frontend && npm install && npm test && npm run dev
 ```
+
+## Deployment
+Railway (backend + Postgres) and Vercel (frontend) configs are included; see
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for steps and environment variables.

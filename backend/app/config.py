@@ -15,15 +15,23 @@ def _bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default)).lower() in {"1", "true", "yes", "on"}
 
 
+def normalize_db_url(url: str) -> str:
+    """Railway/Heroku-style URLs (postgres://, postgresql://) -> SQLAlchemy psycopg3 driver."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-change-me")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-insecure-jwt-change-me")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.getenv("JWT_ACCESS_HOURS", "12")))
     DISPLAY_TOKEN_MINUTES = int(os.getenv("DISPLAY_TOKEN_MINUTES", "15"))
 
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", "postgresql+psycopg://qi:qi@localhost:5432/qi_rhythm"
-    ).replace("postgres://", "postgresql+psycopg://", 1)
+    SQLALCHEMY_DATABASE_URI = normalize_db_url(
+        os.getenv("DATABASE_URL", "postgresql+psycopg://qi:qi@localhost:5432/qi_rhythm")
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
@@ -42,7 +50,8 @@ class Config:
     # Scoring weights (must sum to 100)
     SCORE_WEIGHTS = {"pattern": 40, "timing": 30, "tempo": 15, "completion": 15}
 
-    SOCKETIO_ASYNC_MODE = os.getenv("SOCKETIO_ASYNC_MODE", "threading")
+    SOCKETIO_ASYNC_MODE = os.getenv("SOCKETIO_ASYNC_MODE", "threading")  # "gevent" in production
+    AUDIO_WARMUP = _bool("AUDIO_WARMUP", True)
 
 
 class TestConfig(Config):
