@@ -76,6 +76,7 @@ test('start class, run a turn, see score, confirm', async () => {
     },
     'GET /api/rhythms': { rhythms: [clave] },
     'GET /api/calibration': { profiles: [{ id: 5, device_label: 'Activity room' }] },
+    'GET /api/activities': { activities: [] },
     'POST /api/sessions': sessionPayload(),
     'GET /api/sessions/42': () =>
       sessionPayload(rounds, [{ team: teams[0], points: 99, turns: 1, best: 99 }]),
@@ -125,6 +126,7 @@ test('changing the tolerance preset saves to the session', async () => {
     'GET /api/genres': { genres: [] },
     'GET /api/rhythms': { rhythms: [] },
     'GET /api/sessions/42': sessionPayload(),
+    'GET /api/activities': { activities: [] },
     'PATCH /api/sessions/42': (req) => ({
       ...sessionPayload(),
       session: { id: 42, settings: { ...settings, ...req.body.settings } },

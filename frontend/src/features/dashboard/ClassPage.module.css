@@ -159,3 +159,19 @@
   margin: 0;
   font-family: ui-monospace, monospace;
 }
+.activities {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 1rem;
+}
+.activityNow p {
+  margin: 0 0 0.5rem;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}

@@ -103,7 +103,7 @@ No speech is spoken while recording (it would be heard as hits).
 6. [x] Calibration wizard (calibration audio is analysed in memory, never stored)
 7. [x] Rhythm Recall round, full loop
 8. [x] Display View + Socket.IO + display-token pairing + reconnection (measured: 0.5 s resync after a dropped connection)
-9. [ ] Session scoreboard + saved Activities
+9. [x] Session scoreboard + saved Activities
 10. [ ] Accessibility pass (axe-core)
 11. [ ] Deployment configs (Railway, Vercel) — do not deploy
 

@@ -14,6 +14,7 @@ import { runTurn } from '../game/turnRunner.js';
 import RhythmPicker from '../library/RhythmPicker.jsx';
 import { useLibrary } from '../library/useLibrary.js';
 import TeamBadge from '../teams/TeamBadge.jsx';
+import ActivityBar from './ActivityBar.jsx';
 import Scoreboard from './Scoreboard.jsx';
 import ShowOnTv from './ShowOnTv.jsx';
 import SessionSettings from './SessionSettings.jsx';
@@ -233,6 +234,12 @@ export default function ClassPage() {
       <div className={styles.grid}>
         <section className={styles.card} aria-labelledby="pick-title">
           <h2 id="pick-title">1. Choose a rhythm</h2>
+          <ActivityBar
+            sessionId={cls.sessionId}
+            rhythms={rhythms}
+            roundsPlayed={cls.data.rounds.length}
+            onSelectRhythm={setRhythm}
+          />
           <RhythmPicker
             genres={genres}
             rhythms={rhythms}
