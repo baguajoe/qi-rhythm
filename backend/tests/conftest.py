@@ -1,13 +1,30 @@
 import pytest
+from sqlalchemy import text
 
 from app import create_app
+from app.extensions import db as _db
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def app():
-    return create_app("test")
+    app = create_app("test")
+    with app.app_context():
+        _db.drop_all()
+        _db.create_all()
+        yield app
+        _db.session.remove()
+        _db.drop_all()
 
 
 @pytest.fixture
-def client(app):
+def db(app):
+    yield _db
+    _db.session.rollback()
+    tables = ", ".join(f'"{t.name}"' for t in reversed(_db.metadata.sorted_tables))
+    _db.session.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    _db.session.commit()
+
+
+@pytest.fixture
+def client(app, db):
     return app.test_client()
