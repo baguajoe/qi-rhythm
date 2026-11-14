@@ -107,10 +107,18 @@ export default function ClassPage() {
     setError('');
     say('Listen to the pattern.');
     setPhase('preview');
+    send('control:reference', {
+      title: rhythm.title,
+      pattern: rhythm.pattern,
+      bpm,
+      length_beats: rhythm.length_beats,
+    });
     await preview.play(rhythm.pattern, bpm, {
       lengthBeats: rhythm.length_beats,
       volume: settings.volume,
+      onItem: (item) => item.kind === 'hit' && send('control:beat', { index: item.index }),
     });
+    send('control:idle');
     setPhase('idle');
   }
 

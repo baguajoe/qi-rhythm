@@ -33,7 +33,10 @@ vi.mock('./useSessionSocket.js', () => ({
   useSessionSocket: () => ({ status: 'connected', send: (e, p) => sent.push([e, p]) }),
 }));
 vi.mock('../../audio/player.js', () => ({
-  playPattern: vi.fn(async () => ({})),
+  playPattern: vi.fn(async (_p, _bpm, opts) => {
+    opts?.onItem?.({ kind: 'hit', index: 0 });
+    return {};
+  }),
   stopPlayback: vi.fn(),
 }));
 
@@ -136,5 +139,29 @@ test('changing the tolerance preset saves to the session', async () => {
   await userEvent.click(await screen.findByLabelText(/Challenge/));
   expect(calls.find((c) => c.key === 'PATCH /api/sessions/42').body).toEqual({
     settings: { tolerance_preset: 'challenge' },
+  });
+});
+
+test('playing the pattern tells the TV (reference, beats, then idle)', async () => {
+  localStorage.setItem('qi.activeSession', '42');
+  sent.length = 0;
+  mockFetch({
+    'GET /api/auth/me': ME,
+    'GET /api/teams': { teams },
+    'GET /api/genres': { genres: [] },
+    'GET /api/rhythms': { rhythms: [clave] },
+    'GET /api/sessions/42': sessionPayload(),
+    'GET /api/activities': { activities: [] },
+  });
+  renderApp(<ClassPage />);
+  await userEvent.click(await screen.findByRole('button', { name: /Son Clave 3-2/ }));
+  await userEvent.click(screen.getByRole('button', { name: /Play the pattern/ }));
+  await screen.findByRole('button', { name: /Play again/ });
+  const events = sent.map(([e]) => e).filter((e) => e !== 'control:focus');
+  expect(events).toEqual(['control:reference', 'control:beat', 'control:idle']);
+  expect(sent.find(([e]) => e === 'control:reference')[1]).toMatchObject({
+    title: 'Son Clave 3-2',
+    bpm: 90,
+    length_beats: 8,
   });
 });
