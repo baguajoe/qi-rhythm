@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class GameModeKey(str, enum.Enum):
+class GameModeKey(enum.StrEnum):
     RHYTHM_RECALL = "rhythm_recall"
     # TODO(phase-2): FINISH_THE_BEAT, MUSIC_MEMORY, CALL_AND_RESPONSE
     # TODO(phase-5): BEAT_BUILDER, FOLLOW_THE_GROOVE, RHYTHM_AND_MOVEMENT

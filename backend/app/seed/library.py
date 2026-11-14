@@ -231,7 +231,8 @@ GENRES = [
         "cultural_notes": (
             "Hip-hop began in the Bronx, New York, in the 1970s at block parties where DJs looped "
             "the drum breaks of funk and soul records. Young African American, Puerto Rican, and "
-            "Caribbean-American artists built a culture of rhyme, dance, and art around these beats."
+            "Caribbean-American artists built a culture of rhyme, dance, and art around "
+            "these beats."
         ),
         "rhythms": [
             rhythm(
