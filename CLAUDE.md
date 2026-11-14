@@ -76,7 +76,7 @@ npm run build
 1. [x] Scaffold
 2. [x] Audio engine in isolation (synth, onset, align, scoring, CLI) + pytest suite
 3. [x] Models, migrations, seed data (`flask --app wsgi seed --demo` → demo@example.com / rhythm-demo-123, dev only)
-4. [ ] Auth + teams
+4. [x] Auth + teams
 5. [ ] Rhythm library + Tone.js player + beat visualizer
 6. [ ] Calibration wizard
 7. [ ] Rhythm Recall round, full loop

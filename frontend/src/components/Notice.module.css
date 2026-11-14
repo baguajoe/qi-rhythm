@@ -1,0 +1,21 @@
+.notice {
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+}
+.info {
+  border-color: var(--primary);
+}
+.error {
+  border-color: var(--text);
+  border-style: dashed;
+  font-weight: 700;
+}
+.success {
+  border-color: var(--success);
+}
+.review {
+  border-color: var(--accent);
+  background: var(--surface);
+}

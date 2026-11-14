@@ -27,6 +27,9 @@ def create_app(config_name: str | None = None) -> Flask:
     )
 
     register_cli(app)
+    from .api import register_blueprints
+
+    register_blueprints(app)
 
     @app.get("/health")
     def health():

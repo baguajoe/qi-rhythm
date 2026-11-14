@@ -1,0 +1,46 @@
+.btn {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 3px solid var(--primary);
+  background: var(--surface);
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.primary {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+.secondary {
+}
+.danger {
+  border-color: var(--text);
+  color: var(--text);
+}
+.link {
+  border-color: transparent;
+  text-decoration: underline;
+  font-weight: 600;
+}
+.large {
+  font-size: 1.25rem;
+  min-height: 72px;
+  padding: 0.8rem 1.6rem;
+}
+.huge {
+  font-size: 1.6rem;
+  min-height: 96px;
+  padding: 1rem 2rem;
+  min-width: 12rem;
+}
