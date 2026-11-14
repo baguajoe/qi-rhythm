@@ -84,6 +84,7 @@ export async function runTurn(
     await api(`/api/rounds/${round.id}`, { method: 'PATCH', body: { status: 'recording' } });
     rec.start();
     let started = null;
+    let wentLive = false;
     // Count-in clicks, then the team plays (over the groove-only track, if there is one, which
     // starts with the first click and keeps going through the slack bar).
     const played = await playPattern(pattern, bpm, {
@@ -94,11 +95,19 @@ export async function runTurn(
       music: bed,
       keepMusic: true,
       onStart: (s) => (started = s),
-      onItem: (item) => emit(item.kind === 'count' ? 'countin' : 'hit', item),
+      onItem: (item) => {
+        // "Your turn!" goes up on the 'go' cue: the pattern's first beat, right after the final
+        // count, scheduled on the Transport with the clicks (not when playback finishes, which
+        // is a whole pattern later).
+        if (item.kind === 'go') {
+          wentLive = true;
+          emit('recording');
+        } else emit(item.kind === 'count' ? 'countin' : 'hit', item);
+      },
     });
     bedHandle = played?.music || null;
     if (aborted()) throw new DOMException('Stopped', 'AbortError');
-    emit('recording');
+    if (!wentLive) emit('recording'); // no count-in: the team starts straight away
     await abortableDelay(SLACK_BEATS * spb * 1000, signal);
     const take = await rec.stop();
     bedHandle?.stop();

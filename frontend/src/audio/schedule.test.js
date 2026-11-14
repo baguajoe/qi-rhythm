@@ -56,3 +56,21 @@ test('pickSurprise uses the random source', () => {
   expect(pickSurprise([1, 2, 3], () => 0.99)).toBe(3);
   expect(pickSurprise([], () => 0.5)).toBeNull();
 });
+
+test("the 'go' cue sits on the pattern's first beat, one beat after the final count", () => {
+  const s = buildSchedule(clave, 90, { countIn: 4 });
+  const spb = 60 / 90;
+  const go = s.items.filter((i) => i.kind === 'go');
+  const lastCount = s.items.filter((i) => i.kind === 'count').at(-1);
+  expect(go).toHaveLength(1);
+  expect(go[0].time).toBeCloseTo(4 * spb, 9);
+  expect(go[0].time).toBeCloseTo(s.patternStart, 9);
+  expect(go[0].time - lastCount.time).toBeCloseTo(spb, 9);
+  // Same instant as a hit on beat 0, so the cue and the team's first note coincide.
+  const firstHit = s.items.find((i) => i.kind === 'hit');
+  expect(firstHit.time).toBeCloseTo(go[0].time, 9);
+});
+
+test("no 'go' cue without a count-in", () => {
+  expect(buildSchedule(clave, 90).items.some((i) => i.kind === 'go')).toBe(false);
+});

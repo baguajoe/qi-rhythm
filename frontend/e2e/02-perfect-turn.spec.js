@@ -9,8 +9,10 @@ import {
   micArgs,
   openDisplay,
   pickRhythmAndTeam,
+  readTurnCues,
   runTurn,
   saveState,
+  watchTurnCues,
 } from './helpers.js';
 
 test.use({ launchOptions: micArgs('perfect.wav') });
@@ -40,8 +42,20 @@ test('perfect take scores high and the TV follows live', async ({ page }) => {
     expect(tv.getByText('Your turn!')).toBeVisible({ timeout: 40_000 }),
     expect(tv.getByRole('meter', { name: 'Drum sound' })).toBeVisible({ timeout: 40_000 }),
   ]);
+  await watchTurnCues(page);
   const total = await runTurn(page, TEAM_A);
   await tvStages;
+
+  // "Your turn!" must appear exactly when the team starts: the beat after the final count "1"
+  // (one beat = 667 ms at 90 BPM), not after the pattern has already played out.
+  const cues = await readTurnCues(page);
+  const gapMs = cues.yourTurn - cues.finalCount;
+  test.info().annotations.push({
+    type: 'your turn',
+    description: `"1" -> "Your turn!" ${Math.round(gapMs)} ms`,
+  });
+  expect(gapMs).toBeGreaterThan(667 - 120);
+  expect(gapMs).toBeLessThan(667 + 120);
 
   const round = await latestRound(page);
   test.info().annotations.push({

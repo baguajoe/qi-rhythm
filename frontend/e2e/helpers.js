@@ -126,3 +126,25 @@ export async function expectNoSeriousA11yIssues(page, label) {
   expect(serious, `${label}: ${JSON.stringify(serious, null, 2)}`).toEqual([]);
   return violations;
 }
+
+/**
+ * Record (every animation frame) when the dashboard's live phase line first shows the final
+ * count "1" and when it first shows "Your turn!". Read the result with readTurnCues().
+ */
+export async function watchTurnCues(page) {
+  await page.evaluate(() => {
+    const cues = (window.__turnCues = {});
+    const tick = () => {
+      for (const p of document.querySelectorAll('p[aria-live="polite"]')) {
+        const text = p.textContent.trim();
+        if (text === '1' && cues.finalCount === undefined) cues.finalCount = performance.now();
+        if (text.startsWith('Your turn!') && cues.yourTurn === undefined)
+          cues.yourTurn = performance.now();
+      }
+      if (cues.yourTurn === undefined) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+export const readTurnCues = (page) => page.evaluate(() => window.__turnCues);

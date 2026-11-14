@@ -81,7 +81,8 @@ export default function CalibrationPage() {
           countIn: LATENCY_CLICKS,
           volume: 0.6,
           onStart: (s) => (started = s),
-          onItem: (item) => setPrompt(`Tap! (${LATENCY_CLICKS - item.index} left)`),
+          onItem: (item) =>
+            item.kind === 'count' && setPrompt(`Tap! (${LATENCY_CLICKS - item.index} left)`),
         });
         await new Promise((r) => setTimeout(r, 600));
         const take = await rec.stop();

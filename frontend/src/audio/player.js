@@ -62,7 +62,9 @@ export async function playPattern(
       ids.push(
         transport.schedule((time) => {
           if (item.kind === 'count') kit.click(time, item.accent);
-          else if (!muteHits) kit.play(item.voice, time, item.accent ? 1 : 0.75);
+          else if (item.kind === 'hit' && !muteHits)
+            kit.play(item.voice, time, item.accent ? 1 : 0.75);
+          // 'go' is silent: a visual cue only.
           if (onItem) draw.schedule(() => onItem(item), time);
         }, item.time + lead),
       );

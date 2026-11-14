@@ -50,3 +50,25 @@ test('can skip the reference playback', async () => {
   await runTurn(round, { playReference: false, emit: (s) => stages.push(s) });
   expect(stages[0]).toBe('countin');
 });
+
+test('"Your turn" (recording) is emitted on the go cue, not when playback ends', async () => {
+  const { playPattern } = await import('../../audio/player.js');
+  let finishPlayback;
+  const stages = [];
+  playPattern.mockImplementationOnce(async (_p, _bpm, opts) => opts.onItem?.({ kind: 'hit' }));
+  playPattern.mockImplementationOnce((_p, _bpm, opts) => {
+    opts.onStart?.({ startedAt: 100.42, schedule: {} });
+    for (const n of [4, 3, 2, 1]) opts.onItem?.({ kind: 'count', countNumber: n, index: 4 - n });
+    opts.onItem?.({ kind: 'go', index: -1 });
+    // The pattern's length still has to play out while the team plays.
+    return new Promise((resolve) => (finishPlayback = () => resolve({ startedAt: 100.42 })));
+  });
+  global.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ score: {} }) }));
+  const done = runTurn(round, { emit: (s, d) => stages.push(d?.countNumber ?? s) });
+  await vi.waitFor(() => expect(finishPlayback).toBeDefined());
+  // Playback hasn't finished, yet the team has been told to play right after "1".
+  expect(stages).toEqual(['reference', 'hit', 4, 3, 2, 1, 'recording']);
+  finishPlayback();
+  await done;
+  expect(stages.filter((s) => s === 'recording')).toHaveLength(1);
+});

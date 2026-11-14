@@ -20,6 +20,7 @@ export function usePatternPlayer() {
       onItem: (item) => {
         if (!mounted.current) return;
         if (item.kind === 'count') setState((s) => ({ ...s, count: item.countNumber }));
+        else if (item.kind === 'go') setState((s) => ({ ...s, count: null }));
         else setState((s) => ({ ...s, count: null, playedThrough: item.index }));
         opts.onItem?.(item);
       },

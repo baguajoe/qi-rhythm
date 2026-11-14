@@ -24,7 +24,9 @@ export function patternLengthBeats(pattern, lengthBeats) {
 
 /**
  * Build a play schedule (seconds, relative to start) for an optional count-in followed by the
- * pattern. Each item: { kind: 'count'|'hit', time, index, voice, accent, countNumber }.
+ * pattern. Each item: { kind: 'count'|'go'|'hit', time, index, voice, accent, countNumber }.
+ * After a count-in, a silent 'go' cue sits exactly on the pattern's first beat (one beat after
+ * the final count): the moment the team starts playing and "Your turn!" must appear.
  */
 export function buildSchedule(pattern, bpm, { countIn = 0, lengthBeats } = {}) {
   const spb = 60 / bpm;
@@ -39,6 +41,7 @@ export function buildSchedule(pattern, bpm, { countIn = 0, lengthBeats } = {}) {
     });
   }
   const start = countIn * spb;
+  if (countIn > 0) items.push({ kind: 'go', time: start, index: -1 });
   for (const e of sortedEvents(pattern)) {
     items.push({
       kind: 'hit',
