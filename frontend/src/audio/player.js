@@ -57,8 +57,10 @@ export async function playPattern(
       resolve({ startedAt });
     };
     ids.push(transport.scheduleOnce((time) => draw.schedule(finish, time), endAt));
-    const startedAt = Tone.now() + lead + 0.05;
-    transport.start(Tone.now() + 0.05);
+    // Transport time 0 maps to t0 (AudioContext seconds); every item sounds at t0 + lead + time.
+    const t0 = Tone.now() + 0.05;
+    const startedAt = t0 + lead;
+    transport.start(t0);
     active = { finish };
     onStart?.({ startedAt, schedule: sched });
   });

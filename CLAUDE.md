@@ -78,7 +78,7 @@ npm run build
 3. [x] Models, migrations, seed data (`flask --app wsgi seed --demo` → demo@example.com / rhythm-demo-123, dev only)
 4. [x] Auth + teams
 5. [x] Rhythm library + Tone.js player + beat visualizer
-6. [ ] Calibration wizard
+6. [x] Calibration wizard (calibration audio is analysed in memory, never stored)
 7. [ ] Rhythm Recall round, full loop
 8. [ ] Display View + Socket.IO + display-token pairing + reconnection
 9. [ ] Session scoreboard + saved Activities

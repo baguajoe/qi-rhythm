@@ -1,0 +1,23 @@
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.label {
+  font-weight: 700;
+}
+.track {
+  height: 28px;
+  border: 3px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.large .track {
+  height: 56px;
+}
+.fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 80ms linear;
+}
