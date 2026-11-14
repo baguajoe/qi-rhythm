@@ -44,6 +44,24 @@ npm run format     # prettier
 npm run build
 ```
 
+## Audio engine (backend/app/audio) — core IP, keep heavily tested
+- `patterns.py` beat-relative pattern parsing. `synth.py` synthetic takes (jitter, misses, extras,
+  offset, latency, tempo scale/drift, noise, rumble, count-in bleed).
+- `onset.py`: 22.05 kHz mono → 70 Hz high-pass → librosa spectral flux (hop 128) → peak-pick →
+  backtrack → sample-level attack refinement (~1 ms accuracy) → gates: noise floor + 9 dB,
+  decay/ring masking (≤150 ms after a ≥9 dB louder strike), 30 dB below typical strike.
+  Confidence = SNR ramp (6→24 dB) × near-threshold penalty.
+- `align.py`: expected times = countin_start_s + (count_in + beat)·spb + latency. Onsets before
+  pattern start − ½ beat (count-in bleed) or after end + ½ beat are ignored. Grid fit: tempo scale
+  0.80–1.25 (biased to 1.0) + clamped median offset (±200 ms), then Hungarian matching.
+- `scoring.py`: F1 pattern, preset timing ramp, tempo (overall IOI ratio + steadiness),
+  completion; timing/tempo/completion × evidence factor min(1, matched/⌈expected/2⌉).
+  needs_review when confidence < 0.5, no hits, or detected/expected outside 0.5–2.0.
+  `mode` param selects weights (MODE_WEIGHTS) so Phase 2 modes reuse the engine.
+- Call `scoring.warmup()` at worker start (numba JIT); warm analysis of 15 s clip ≈ 0.1 s.
+- Design choice: a team playing the right pattern uniformly fast/slow is matched via the tempo
+  fit and penalised only in tempo_consistency (e.g. 10% fast → tempo ≈ 70, total ≈ 95).
+
 ## Conventions
 - Conventional commits (`feat:`, `fix:`, `test:`, `chore:`); commit + push after each slice.
 - Stubs are marked `# TODO(phase-N):` (or `// TODO(phase-N):`) and listed below.
@@ -56,7 +74,7 @@ npm run build
 
 ## Roadmap (Phase 1 slices)
 1. [x] Scaffold
-2. [ ] Audio engine in isolation (synth, onset, align, scoring, CLI) + pytest suite
+2. [x] Audio engine in isolation (synth, onset, align, scoring, CLI) + pytest suite
 3. [ ] Models, migrations, seed data
 4. [ ] Auth + teams
 5. [ ] Rhythm library + Tone.js player + beat visualizer
@@ -72,7 +90,7 @@ event/demo mode (May 2027 Senior Community Wellness Day); Phase 5 remote tournam
 Rhythm & Movement, Sound Relaxation, ML percussion classification, subscriptions.
 
 ## Open TODOs / stubs
-_(none yet)_
+- `scoring.MODE_WEIGHTS` — TODO(phase-2): weights for Finish the Beat, Music Memory, Call-and-Response.
 
 ## Review flags before launch
 - Genre `cultural_notes` must be reviewed by a knowledgeable musician.
